@@ -71,6 +71,7 @@ RFRModel <- R6Class("RFRModel",
                       # * add.instance: add instance as predictor in the data set
                       trainModel = function(configurations, experiments, add.dummy = TRUE, add.instance=TRUE) {
                         # create, filter and impute training data
+                        cat("# Creating training data...\n")
                         data <- private$createData(configurations, experiments, add.dummy = add.dummy, add.instance=add.instance)
                         self$training_data <- data
                         
@@ -81,11 +82,11 @@ RFRModel <- R6Class("RFRModel",
                         }
                         
                         # train the model
-                        cat("# training general random forest model ...\n")
+                        cat("# Training general random forest model ...\n")
                         self$model <- randomForest::randomForest(x=data$data[,data$pnames], y=data$data$.PERFORMANCE., 
                                                                  importance=TRUE, localImp = TRUE, ntree=private$n_trees)
                         
-                        cat("# identifying important parameters ...\n")
+                        cat("# Identifying important parameters ...\n")
                         private$identifyImportantParameters(configurations, experiments)
                         
                         # If enforced, a dummy reference parameter is added to the list of important parameters
@@ -93,19 +94,19 @@ RFRModel <- R6Class("RFRModel",
                         # IMPORTANT: this parameter should be added to the data set as a random uniformly sampled 
                         # predictor
                         if (add.dummy && !("dummy" %in% self$important_parameters)) {
-                          cat("# adding dummy reference parameter for interaction calculation ...\n")
+                          cat("# Adding dummy reference parameter for interaction calculation ...\n")
                           self$important_parameters <- c(self$important_parameters, "dummy")
                         }
                         
                         if (length(self$important_parameters)>1) {
                           # retrain the model for identify important parameters
-                          cat("# re-training model with important parameters ...\n")
+                          cat("# Re-training model with important parameters:",self$important_parameters,"\n")
                           self$model <- randomForest::randomForest(x=data$data[,self$important_parameters,drop=FALSE], 
                                                                    y=data$data$.PERFORMANCE., importance=TRUE, localImp = TRUE, 
                                                                    ntree=private$n_trees)                 
                         }
                         
-                        cat("# calculating interactions ...\n")
+                        cat("# Calculating interactions between important parameters...\n")
                         private$calculateInteractions()
                         
                         return (TRUE)
@@ -137,7 +138,7 @@ RFRModel <- R6Class("RFRModel",
                       # function generateSampleOrder that updates the sampling order of the parameters
                       # based on the hierarchy defined by the current parameter interaction 
                       generateSamplingOrder = function(extra.dependencies = NULL) {
-                        cat("# generating sampling order ...\n")
+                        cat("# Generating sampling order ...\n")
                         cdependencies <- self$mergeDependencies(extra.dependencies)
                         
                         # calculate hierarchy
@@ -210,6 +211,9 @@ RFRModel <- R6Class("RFRModel",
                       # and adds over the new interactions detected
                       depends = c(), 
                       
+                      # measures to define importance
+                      imeasures = c("mean_min_depth", "mse_increase", "times_a_root"),
+                      
                       ####################################################################
                       ################### data manipulation functions ####################
                       ####################################################################
@@ -222,13 +226,14 @@ RFRModel <- R6Class("RFRModel",
                       # * add.instance: bool, addind the instance as a predictor
                       createData = function(configurations, experiments, remove.na.from=NULL, add.dummy=FALSE, add.instance=TRUE) {
                         # Drop not used columns (.ID., .PARENT.)
+                        cat("#   creating training data...\n")
                         configurations <- configurations[, grep("^\\.", colnames(configurations), invert = TRUE),drop = FALSE]
                         rownames(configurations) <- NULL
                         
                         # Filter variables that are all NA (currently not supported)
                         configurations <- private$filterNACols(configurations)
                         if (ncol(configurations) < 2) {
-                          cat ("# Only ", ncol(configurations)," parameters of the training ",
+                          cat ("#   only ", ncol(configurations)," parameters of the training ",
                                "data do not have NA values. Cannot train model.\n")
                           importance_frame <- NULL
                           important_parameters <- c()
@@ -237,6 +242,7 @@ RFRModel <- R6Class("RFRModel",
                         
                         # Filter NA rows for parameters in remove.na.from
                         if (!is.null(remove.na.from)) {
+                          cat("#   removing NA rows from", remove.na.from,"\n")
                           for (p in remove.na.from) {
                             index <- !is.na(configurations[,p])
                             configurations <- configurations[index, ,drop=FALSE]
@@ -259,7 +265,7 @@ RFRModel <- R6Class("RFRModel",
                                "parameters having only one value in the training set\n")
                           return(NULL)
                         } else {
-                          cat ("# Only parameters ", non.equal, " have more than one value for training model\n")
+                          cat ("#   only parameters ", non.equal, " have more than one value for training model\n")
                           configurations <- configurations[, non.equal, drop=FALSE]
                         }
                         
@@ -273,15 +279,8 @@ RFRModel <- R6Class("RFRModel",
                         pnames     <- colnames(configurations)
                         inames     <- NULL
                         
-                        # impute experiments (ranks) by instance
-                        # count experiments by configuration
-                        na_by_conf <- apply(experiments, 2, function(x) sum(is.na(x)))
-                        for (i in 1:nrow(experiments)) {
-                          #impute ranks by adding rank by number of experiments to baseline executed configuration
-                          exps_na <- is.na(experiments[i,])
-                          rank_exps_na  <- rank(na_by_conf[exps_na])
-                          experiments[i,exps_na] = max(experiments[i,], na.rm=TRUE) + rank_exps_na
-                        }
+                        # impute experiment performance by instance
+                        experiments <- private$doImputePerformance(experiments)
                         
                         lapply(1:nrow(experiments), private$dataNameBind, experiments=experiments, 
                                configurations=configurations, add.instance=add.instance)
@@ -302,31 +301,22 @@ RFRModel <- R6Class("RFRModel",
                       # * index: experiment index to add to the file
                       # * expeirments: experiments data frame
                       # * configurations: configurations data frame
-                      # * filter.na: bool, remove experiments that dont have a value (not executed)
                       # * file: filename to which data entries should be added
                       # * add.instance:  bool, adding instance as a predictor variable
-                      dataNameBind = function (index, experiments, configurations, filter.na=TRUE, 
-                                               file=paste("rf-",private$id_seed,"-data.txt",sep=""), 
-                                               add.instance=TRUE) {
+                      dataNameBind = function (index, experiments, configurations, file=paste("rf-",private$id_seed,"-data.txt",sep=""), add.instance=TRUE) {
+                        # get experiment data
+                        experiment <- experiments[index,]
                         
-                        # get experiment data and apply rank
-                        experiment <- rank(experiments[index,])
-                        
-                        #remove infinite experiments (rejected)
-                        not.inf <- !is.infinite(experiment)
-                        experiment <- experiment[not.inf]
+                        #remove infinite and NA experiments (rejected)
+                        not.inf.na <- !is.infinite(experiment) & !is.na(experiment)
+                        experiment <- experiment[not.inf.na]
                         if (length(experiment) < 1)
                           return
+                        all.configurations <- configurations[not.inf.na,]
                         
-                        not.na <- rep(TRUE, length(experiment))
-                        if (filter.na) {
-                          not.na <- !is.na(experiment)
-                          experiment <- experiment[not.na]
-                          if (length(experiment) < 1)
-                            return
-                        }
-                        all.configurations <- configurations[not.na,]
-                        
+                        # apply rank
+                        experiment <- rank(experiment)
+                      
                         # add instance as predictor and join data
                         if (add.instance) {
                           all.instances  <- matrix(paste("instance",index,sep=""), ncol=1, nrow=length(experiment))
@@ -349,19 +339,19 @@ RFRModel <- R6Class("RFRModel",
                       # * data: data frame with data entries
                       # * pnames: parameter names to be considered in the imputation
                       doImputeCols = function(data, pnames=NULL) {
-                        performance.as.factor <- FALSE
+                        cat("#   imputing parameter data...\n")
                         
                         if(is.null(pnames))
                           pnames <- private$parameters$names  
                         
                         for (pname in pnames) {
                           if (!(pname %in% colnames(data))) {
-                            cat("# Skipping imputation of ", pname, "\n")
+                            cat("#   skipping imputation of ", pname, "\n")
                             next;
                           }
                           sel <- is.na(data[,pname])
                           if (sum(sel) >= 1){
-                            cat("# Imputing ", sum(sel),"/",length(sel)," values in ", pname, "type", private$parameters$types[pname],"\n")
+                            cat("#   imputing", sum(sel),"/",length(sel),"values in", pname, "type", private$parameters$types[pname],"\n")
                             if (private$parameters$types[pname] %in% c("r","i", "ilog", "rlog")) {
                               data[sel ,pname] <- private$parameters$domain[[pname]][2] * 2
                             } else if (private$parameters$types[pname] %in% c("c","o")) {
@@ -379,6 +369,21 @@ RFRModel <- R6Class("RFRModel",
                           data[,".PERFORMANCE."] <- as.numeric(data[,".PERFORMANCE."])
                         }
                         return(data)
+                      },
+                      
+                      # Function doImputePerformance imputes experiment performance. NA experiments are imputed,
+                      # while Inf experiments are not imputed and should be handled later
+                      # * experiments: experiments data frame
+                      # TODO: improve imputation
+                      doImputePerformance = function(experiments) {
+                        na_by_conf <- apply(experiments, 2, function(x) sum(is.na(x)))
+                        for (i in 1:nrow(experiments)) {
+                          #impute ranks by adding rank by number of experiments to baseline executed configuration
+                          exps_na       <- is.na(experiments[i,])
+                          rank_exps_na  <- rank(na_by_conf[exps_na])
+                          experiments[i,exps_na] = max(experiments[i,], na.rm=TRUE) + rank_exps_na
+                        }
+                        return(experiments)
                       },
                       
                       # Function filterNACols remove columns (parameters) that only have NA values
@@ -411,7 +416,7 @@ RFRModel <- R6Class("RFRModel",
                         
                         # get n_imp_par most important parameters
                         params <- randomForestExplainer::important_variables(self$importance_frame, k = private$n_imp_par, 
-                                                                             measures = c("mean_min_depth", "no_of_trees"))
+                                                                             measures = private$imeasures)
                         #cat("Initial important parameters: ", params,"\n")
                         
                         # check if there is conditional parameters between the important vars
@@ -424,7 +429,7 @@ RFRModel <- R6Class("RFRModel",
                         
                         # calculate interactions between parameters
                         self$important_parameters <- params[!(params %in% pnames.to.remove)]
-                        cat("# important parameters after conditional removal: ", self$important_parameters,"\n")
+                        cat("#   important parameters after conditional removal: ", self$important_parameters,"\n")
                       },
                       
                       # aggregate inverse interactions. This is done to detect interactions
@@ -433,6 +438,7 @@ RFRModel <- R6Class("RFRModel",
                       # interaction between these two variables without having a hierarchical
                       # relationship in this interaction)
                       aggregateInteractions = function() {
+                        cat("#   aggregating reversed interactions...\n")
                         not.search = c()
                         self$full_interactions_frame = self$interactions_frame
                         for(i in 1:nrow(self$interactions_frame)) {
@@ -464,10 +470,10 @@ RFRModel <- R6Class("RFRModel",
                       calculateInteractions = function(remove.inversed=FALSE, aggregate.inversed=TRUE) {
                         # calculate interactions
                         if (length(self$important_parameters)>0) {
-                          cat ("# calculating interactions between selected parameters: ", self$important_parameters, "\n" )
+                          cat ("#   calculating interactions between selected parameters: ", self$important_parameters, "\n" )
                           self$interactions_frame <- randomForestExplainer::min_depth_interactions(self$model, self$important_parameters)
                         } else {
-                          cat ("# calculating interactions between all parameters\n")
+                          cat ("#   calculating interactions between all parameters\n")
                           self$interactions_frame <- randomForestExplainer::min_depth_interactions(self$model)
                         }
                         # order them by number of occurrence of the interactions in the trees
@@ -597,13 +603,13 @@ RFRModel <- R6Class("RFRModel",
                             return(FALSE)
                           }
                           
-                          cat("# Evaluating conditional parameter ", pname, " importance with parameters ",aux.data$pnames, "\n")
+                          cat("#   evaluating conditional parameter ", pname, " importance with parameters ",aux.data$pnames, "\n")
                           aux.model <- randomForest::randomForest(x=aux.data$data[,aux.data$pnames], y=aux.data$data$.PERFORMANCE., 
                                                                   importance=TRUE, localImp = TRUE, ntree=private$n_trees)
-                          cat("# Calculating importance ... \n") 
+                          cat("#   calculating importance of",pname," \n") 
                           aux.importance_frame <- randomForestExplainer::measure_importance(aux.model)
                           aux.params <- randomForestExplainer::important_variables(aux.importance_frame, k = private$n_imp_par, 
-                                                                                   measures = c("mean_min_depth", "no_of_trees"))
+                                                                                   measures = private$imeasures)
                           if (pname %in% aux.params) {
                             return(TRUE)
                           } else {

@@ -9,14 +9,13 @@ library("R6")
 
 ##########################################################################
 ###
-### Ranking quartile based random forest
+### Performance Quartile based random forest
 ###
 ##########################################################################
 ##########################################################################
-RFRQModel <- R6Class("RFRQModel",
+RFQModel <- R6Class("RFQModel",
                     public = list(
-                      # model is an object obtained using the randomForest
-                      # package
+                      # model is an object obtained using the randomForest package
                       model = NULL,
                       training_data = NULL,
                       
@@ -83,7 +82,7 @@ RFRQModel <- R6Class("RFRQModel",
                         }
                         
                         # train the model
-                        cat("# Training general random forest model ...\n")
+                        cat("# Training main random forest model ...\n")
                         self$model <- randomForest::randomForest(x=data$data[,data$pnames], y=data$data$.PERFORMANCE., 
                                                                  importance=TRUE, localImp = TRUE, ntree=private$n_trees)
                         
@@ -107,7 +106,7 @@ RFRQModel <- R6Class("RFRQModel",
                                                                    ntree=private$n_trees)                 
                         }
                         
-                        cat("# calculating interactions between important parameters...\n")
+                        cat("# Calculating interactions between important parameters...\n")
                         private$calculateInteractions()
                         
                         return (TRUE)
@@ -219,8 +218,8 @@ RFRQModel <- R6Class("RFRQModel",
                       ################### data manipulation functions ####################
                       ####################################################################
                       createData = function(configurations, experiments, remove.na.from=NULL, add.dummy=FALSE, add.instance=TRUE) {
-                        # Drop not used columns (.ID., .PARENT.)
                         cat("#   creating training data...\n")
+                        # Drop not used columns (.ID., .PARENT.)
                         configurations <- configurations[, grep("^\\.", colnames(configurations), invert = TRUE),drop = FALSE]
                         rownames(configurations) <- NULL
                         
@@ -229,8 +228,8 @@ RFRQModel <- R6Class("RFRQModel",
                         if (ncol(configurations) < 2) {
                           cat ("#   only ", ncol(configurations)," parameters of the training ",
                                "data do not have NA values. Cannot train model.\n")
-                          importance_frame <- NULL
-                          important_parameters <- c()
+                          self$importance_frame <- NULL
+                          self$important_parameters <- c()
                           return(NULL)
                         }
                         
@@ -273,9 +272,6 @@ RFRQModel <- R6Class("RFRQModel",
                         pnames     <- colnames(configurations)
                         inames     <- NULL
                         
-                        # impute experiment performance by instance
-                        experiments <- private$doImputePerformance(experiments)
-                        
                         lapply(1:nrow(experiments), private$dataNameBind, experiments=experiments, 
                                configurations=configurations, add.instance=add.instance)
                         data <- read.table(paste("rf-",private$id_seed,"-data.txt",sep=""), 
@@ -296,10 +292,10 @@ RFRQModel <- R6Class("RFRQModel",
                       # * configurations: configurations data frame
                       # * file: filename to which data entries should be added
                       # * add.instance:  bool, adding instance as a predictor variable
-                      dataNameBind = function (index, experiments, configurations,  file=paste("rf-",private$id_seed,"-data.txt",sep=""), add.instance=TRUE) {
-                        # get experiment data
+                      dataNameBind = function (index, experiments, configurations, file=paste("rf-",private$id_seed,"-data.txt",sep=""), add.instance=TRUE) {
+                        # get experiment data 
                         experiment <- experiments[index,]
-                        
+
                         #remove infinite and NA experiments (rejected)
                         not.inf.na <- !is.infinite(experiment) & !is.na(experiment)
                         experiment <- experiment[not.inf.na]
@@ -307,15 +303,14 @@ RFRQModel <- R6Class("RFRQModel",
                           return
                         all.configurations <- configurations[not.inf.na,]
                         
-                        #and apply rank and then get quartile
-                        experiment <- rank(experiment)
-                        q <- quantile(experiment)
+                        # get quartile
+                        q <- quantile(experiment, na.rm=TRUE)
                         qexperiment <- c()
                         for (i in 1:length(experiment)) {
                           qexperiment <- c(qexperiment, min(which(experiment[i] <= q)))-1
                         }
                         experiment <- qexperiment
-                        
+                      
                         # add instance as predictor and join data
                         if (add.instance) {
                           all.instances  <- matrix(paste("instance",index,sep=""), ncol=1, nrow=length(experiment))
@@ -351,7 +346,7 @@ RFRQModel <- R6Class("RFRQModel",
                           sel <- is.na(data[,pname])
                           if (sum(sel) >= 1){
                             cat("#   imputing", sum(sel),"/",length(sel),"values in", pname, "type", private$parameters$types[pname],"\n")
-                            if (private$parameters$types[pname] %in% c("r","i")) {
+                            if (private$parameters$types[pname] %in% c("r","i", "ilog", "rlog")) {
                               data[sel ,pname] <- private$parameters$domain[[pname]][2] * 2
                             } else if (private$parameters$types[pname] %in% c("c","o")) {
                               data[,pname] <- as.character(data[,pname])
@@ -368,22 +363,6 @@ RFRQModel <- R6Class("RFRQModel",
                           data[,".PERFORMANCE."] <- as.factor(data[,".PERFORMANCE."])
                         }
                         return(data)
-                      },
-                      
-                      # Function doImputePerformance imputes experiment performance. NA experiments are imputed,
-                      # while Inf experiments are not imputed and should be handled later
-                      # * experiments: experiments data frame
-                      # TODO: improve imputation
-                      doImputePerformance = function(experiments) {
-                        cat("#   imputing performance...")
-                        na_by_conf <- apply(experiments, 2, function(x) sum(is.na(x)))
-                        for (i in 1:nrow(experiments)) {
-                          #impute ranks by adding rank by number of experiments to baseline executed configuration
-                          exps_na       <- is.na(experiments[i,])
-                          rank_exps_na  <- rank(na_by_conf[exps_na])
-                          experiments[i,exps_na] = max(experiments[i,], na.rm=TRUE) + rank_exps_na
-                        }
-                        return(experiments)
                       },
                       
                       # Function filterNACols remove columns (parameters) that only have NA values
@@ -604,7 +583,7 @@ RFRQModel <- R6Class("RFRQModel",
                           cat("#   evaluating conditional parameter ", pname, " importance with parameters ",aux.data$pnames, "\n")
                           aux.model <- randomForest::randomForest(x=aux.data$data[,aux.data$pnames], y=aux.data$data$.PERFORMANCE., 
                                                                   importance=TRUE, localImp = TRUE, ntree=private$n_trees)
-                          cat("#   calculating importance ",pname," \n") 
+                          cat("#   calculating importance of ",pname," \n") 
                           aux.importance_frame <- randomForestExplainer::measure_importance(aux.model)
                           aux.params <- randomForestExplainer::important_variables(aux.importance_frame, k = private$n_imp_par, 
                                                                                    measures = private$imeasures)
