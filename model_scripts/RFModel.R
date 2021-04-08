@@ -4,7 +4,6 @@ require("randomForestExplainer")
 # https://cran.r-project.org/web/packages/randomForestExplainer/vignettes/randomForestExplainer.html
 # Thesis that explains the methods in randomForestExplainer
 # https://rawgit.com/geneticsMiNIng/BlackBoxOpener/master/randomForestExplainer_Master_thesis.pdf
-
 library("R6")
 
 ##########################################################################
@@ -15,8 +14,7 @@ library("R6")
 ##########################################################################
 RFModel <- R6Class("RFModel",
                    public = list(
-                     # model is an object obtained using the randomForest
-                     # package
+                     # model is an object obtained using the randomForest package
                      model = NULL,
                      training_data = NULL,
                      # data frame obtained from the randomForestExplainer package
@@ -64,8 +62,12 @@ RFModel <- R6Class("RFModel",
                        self$sampling.order = names(scenario$parameters$conditions)
                      },
                      
-                     # function train model trains, calculate important parameters and
+                     # function trainModel trains a random forest model, calculates important parameters and
                      # generates a data frame with their interactions
+                     # * configurations: configurations data frame
+                     # * experiments: experiment data frame
+                     # * add.dummy: add a dummy predictor to the data set (used as reference variable)
+                     # * add.instance: add instance as predictor in the data set
                      trainModel = function(configurations, experiments, add.dummy = TRUE, add.instance=TRUE) {
                        # create, filter and impute training data
                        data <- private$createData (configurations, experiments, add.dummy = add.dummy , add.instance=add.instance)
@@ -76,7 +78,6 @@ RFModel <- R6Class("RFModel",
                               "forest model\n")
                          return (FALSE)
                        }
-                       
                        
                        # train the model
                        cat("# training general random forest model ...\n")
@@ -208,6 +209,12 @@ RFModel <- R6Class("RFModel",
                      ################### data manipulation functions ####################
                      ####################################################################
                      
+                     # Function createData generates a data set for training a random forest model
+                     # * configurations: configurations data frame
+                     # * experiments: experiments data set
+                     # * remove.na.from: vector of parameter names to indicate the removal of rows with NA values 
+                     # * add.dummy: bool, adding a dummy predictor to be used as reference
+                     # * add.instance: bool, addind the instance as a predictor
                      createData = function(configurations, experiments, remove.na.from=NULL, add.dummy=FALSE, add.instance=TRUE) {
                        # Drop not used columns (.ID., .PARENT.)
                        configurations <- configurations[, grep("^\\.", colnames(configurations), invert = TRUE),drop = FALSE]
@@ -218,8 +225,8 @@ RFModel <- R6Class("RFModel",
                        if (ncol(configurations) < 2) {
                          cat ("# Only ", ncol(configurations)," parameters of the training ",
                               "data have NA values. Cannot train model.\n")
-                         importance_frame <- NULL
-                         important_parameters <- c()
+                         self$importance_frame <- NULL
+                         self$important_parameters <- c()
                          return(NULL)
                        }
                        
@@ -234,6 +241,8 @@ RFModel <- R6Class("RFModel",
                        if (nrow(configurations) < 2 || ncol(experiments) < 2) {
                          cat ("# Not enough data to train model after removal of configurations with ",
                               "parameters ",remove.na.from," set to NA\n")
+                         self$importance_frame <- NULL
+                         self$important_parameters <- c()
                          return(NULL)
                        } 
                        
@@ -243,6 +252,8 @@ RFModel <- R6Class("RFModel",
                        if (length(non.equal)<1) {
                          cat ("# Not enough data to train model after removal of ",
                               "parameters having only one value in the training set\n")
+                         self$importance_frame <- NULL
+                         self$important_parameters <- c()
                          return(NULL)
                        } else {
                          cat ("# Only parameters ", non.equal, " have more than one value for training model\n")
@@ -265,8 +276,9 @@ RFModel <- R6Class("RFModel",
                                           header=TRUE, sep=":", stringsAsFactors=FALSE)
                        data <- private$doImputeCols(data) 
 
+                       # Adding instances to the data set
                        if (add.instance){
-                         data[,"instance"]=as.factor(data[,"instance"])
+                         data[,"instance"] = as.factor(data[,"instance"])
                          final.data <- list(data=data, pnames=c(pnames,"instance"))
                        }else {
                          final.data <- list(data=data, pnames=pnames)
@@ -274,18 +286,26 @@ RFModel <- R6Class("RFModel",
                        return(final.data)
                      }, 
                      
+                     # Function dataNameBind generates a dataset file 
+                     # * index: experiment index to add to the file
+                     # * expeirments: experiments data frame
+                     # * configurations: configurations data frame
+                     # * filter.na: bool, remove experiments that dont have a value (not executed)
+                     # * file: filename to which data entries should be added
+                     # * add.instance:  bool, adding instance as a predictor variable
                      dataNameBind = function (index, experiments, configurations, filter.na=TRUE, 
                                               file=paste("rf-",private$id_seed,"-data.txt",sep=""), 
                                               add.instance=TRUE) {
                        
                        experiment <- experiments[index,]
                        
-                       #remove infite experiments (rejected)
+                       #remove infinite experiments (rejected)
                        not.inf <- !is.infinite(experiment)
                        experiment <- experiment[not.inf]
                        if (length(experiment) < 1)
                          return
                        
+                       # remove NA experiments
                        not.na <- rep(TRUE, length(experiment))
                        if (filter.na) {
                          not.na <- !is.na(experiment)
@@ -293,8 +313,9 @@ RFModel <- R6Class("RFModel",
                          if (length(experiment) < 1)
                            return
                        }
-                       
                        all.configurations <- configurations[not.na,]
+                       
+                       # add instance as predictor and join data
                        if (add.instance) {
                          all.instances  <- matrix(paste("instance",index,sep=""), ncol=1, nrow=length(experiment))
                          data           <- cbind(all.configurations, all.instances, experiment)
@@ -304,12 +325,17 @@ RFModel <- R6Class("RFModel",
                          colnames(data) <- c(colnames(all.configurations), ".PERFORMANCE.")
                        }
                        
+                       # Write lines (data entries) to the file
                        if (index==1)
                          write.table(data, append=FALSE, sep=":", row.names=FALSE, col.names=TRUE, quote=FALSE, file=file)
                        else
                          write.table(data, append=TRUE, sep=":", row.names=FALSE, col.names=FALSE, quote=FALSE, file=file)
                      },
                      
+                     # Function doImputeCols imputes parameter configuration data. Categorical variables are imputed as 
+                     # __miss__ and numerical as the domain upper bound * 2
+                     # * data: data frame with data entries
+                     # * pnames: parameter names to be considered in the imputation
                      doImputeCols = function(data, pnames=NULL) {
                        performance.as.factor <- FALSE
                        
@@ -320,10 +346,12 @@ RFModel <- R6Class("RFModel",
                          if (!(pname %in% colnames(data))) next;
                          sel <- is.na(data[,pname])
                          if (sum(sel) >= 1){
+                           cat("# Imputing ", sum(sel),"/",length(sel)," values in ", pname, "type", private$parameters$types[pname],"\n")
                            if (private$parameters$types[pname] %in% c("r","i")) {
                              data[sel ,pname] <- private$parameters$domain[[pname]][2] * 2
                            } else if (private$parameters$types[pname] %in% c("c","o")) {
-                             data[sel ,pname] <- "__miss__"
+                             data[,pname] <- as.character(data[,pname])
+                             data[sel ,pname] <- rep("__miss__", sum(sel))
                            }
                          }
                          
@@ -338,6 +366,8 @@ RFModel <- R6Class("RFModel",
                        return(data)
                      },
                      
+                     # Function filterNACols remove columns (parameters) that only have NA values
+                     # * configurations: configurations data frame
                      filterNACols = function(configurations) {
                        all.na <- which(colSums(is.na(configurations)) == nrow(configurations))
                        
@@ -520,6 +550,8 @@ RFModel <- R6Class("RFModel",
                        for (i in 1:nrow(self$interactions_frame)) {
                          pname <- as.character(self$interactions_frame$variable[i])
                          rname <- as.character(self$interactions_frame$root_variable[i])
+                         if (pname %in% c("instance","dummy") || rname %in% c("instance","dummy"))
+                           next
                          if (self$isAllowedInteraction(pname=pname, rname=rname, depends=private$depends))  {
                            sel <- c(sel, i)
                            private$depends[[pname]] <- unique(c(private$depends[[pname]], rname))

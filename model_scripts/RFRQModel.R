@@ -64,8 +64,12 @@ RFRModel <- R6Class("RFRModel",
                         self$sampling.order = names(scenario$parameters$conditions)
                       },
                       
-                      # function train model trains, calculate important parameters and
+                      # function trainModel trains a random forest model, calculates important parameters and
                       # generates a data frame with their interactions
+                      # * configurations: configurations data frame
+                      # * experiments: experiment data frame
+                      # * add.dummy: add a dummy predictor to the data set (used as reference variable)
+                      # * add.instance: add instance as predictor in the data set
                       trainModel = function(configurations, experiments, add.dummy = TRUE, add.instance=TRUE) {
                         # create, filter and impute training data
                         data <- private$createData(configurations, experiments, add.dummy = add.dummy, add.instance=add.instance)
@@ -236,6 +240,8 @@ RFRModel <- R6Class("RFRModel",
                         if (nrow(configurations) < 2 || ncol(experiments) < 2) {
                           cat ("# Not enough data to train model after removal of configurations with ",
                                "parameters ",remove.na.from," set to NA\n")
+                          self$importance_frame <- NULL
+                          self$important_parameters <- c()
                           return(NULL)
                         } 
                         
@@ -285,11 +291,17 @@ RFRModel <- R6Class("RFRModel",
                         return(final.data)
                       }, 
                       
-                      
+                      # Function dataNameBind generates a dataset file 
+                      # * index: experiment index to add to the file
+                      # * expeirments: experiments data frame
+                      # * configurations: configurations data frame
+                      # * filter.na: bool, remove experiments that dont have a value (not executed)
+                      # * file: filename to which data entries should be added
+                      # * add.instance:  bool, adding instance as a predictor variable
                       dataNameBind = function (index, experiments, configurations, filter.na=TRUE, 
                                                file=paste("rf-",private$id_seed,"-data.txt",sep=""), add.instance=TRUE) {
                         
-                        # get experiment data and apply rank
+                        # get experiment data and apply rank and then get quartile
                         experiment <- rank(experiments[index,])
                         q <- quantile(experiment)
                         qexperiment <- c()
@@ -311,8 +323,9 @@ RFRModel <- R6Class("RFRModel",
                           if (length(experiment) < 1)
                             return
                         }
-                        
                         all.configurations <- configurations[not.na,]
+                        
+                        # add instance as predictor and join data
                         if (add.instance) {
                           all.instances  <- matrix(paste("instance",index,sep=""), ncol=1, nrow=length(experiment))
                           data           <- cbind(all.configurations, all.instances, experiment)
@@ -322,12 +335,17 @@ RFRModel <- R6Class("RFRModel",
                           colnames(data) <- c(colnames(all.configurations), ".PERFORMANCE.")
                         }
                         
+                        # Write lines (data entries) to the file
                         if (index==1)
                           write.table(data, append=FALSE, sep=":", row.names=FALSE, col.names=TRUE, quote=FALSE, file=file)
                         else
                           write.table(data, append=TRUE, sep=":", row.names=FALSE, col.names=FALSE, quote=FALSE, file=file)
                       },
                       
+                      # Function doImputeCols imputes parameter configuration data. Categorical variables are imputed as 
+                      # __miss__ and numerical as the domain upper bound * 2
+                      # * data: data frame with data entries
+                      # * pnames: parameter names to be considered in the imputation
                       doImputeCols = function(data, pnames=NULL) {
                         performance.as.factor <- FALSE
                         
@@ -335,13 +353,18 @@ RFRModel <- R6Class("RFRModel",
                           pnames <- private$parameters$names  
                         
                         for (pname in pnames) {
-                          if (!(pname %in% colnames(data))) next;
+                          if (!(pname %in% colnames(data))) {
+                            cat("# Skipping imputation of ", pname, "\n")
+                            next;
+                          }
                           sel <- is.na(data[,pname])
                           if (sum(sel) >= 1){
+                            cat("# Imputing ", sum(sel),"/",length(sel)," values in ", pname, "type", private$parameters$types[pname],"\n")
                             if (private$parameters$types[pname] %in% c("r","i")) {
                               data[sel ,pname] <- private$parameters$domain[[pname]][2] * 2
                             } else if (private$parameters$types[pname] %in% c("c","o")) {
-                              data[sel ,pname] <- "__miss__"
+                              data[,pname] <- as.character(data[,pname])
+                              data[sel ,pname] <- rep("__miss__", sum(sel))
                             }
                           }
                           
@@ -356,6 +379,8 @@ RFRModel <- R6Class("RFRModel",
                         return(data)
                       },
                       
+                      # Function filterNACols remove columns (parameters) that only have NA values
+                      # * configurations: configurations data frame
                       filterNACols = function(configurations) {
                         all.na <- which(colSums(is.na(configurations)) == nrow(configurations))
                         
