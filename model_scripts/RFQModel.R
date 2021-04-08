@@ -212,7 +212,7 @@ RFQModel <- R6Class("RFQModel",
                       depends = c(), 
                       
                       # measures to define importance
-                      imeasures = c("mean_min_depth", "mse_increase", "times_a_root"),
+                      imeasures = c("mean_min_depth", "accuracy_decrease", "times_a_root"),
                       
                       ####################################################################
                       ################### data manipulation functions ####################
