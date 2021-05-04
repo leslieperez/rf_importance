@@ -300,9 +300,6 @@ RFRQModel <- R6Class("RFRQModel",
                         # get experiment data
                         experiment <- experiments[index,]
                         
-                        #remove infinite and NA experiments (rejected)
-                        not.inf.na <- !is.infinite(experiment) & !is.na(experiment)
-                        experiment <- experiment[not.inf.na]
                         if (length(experiment) < 1)
                           return
                         all.configurations <- configurations[not.inf.na,]
@@ -381,7 +378,7 @@ RFRQModel <- R6Class("RFRQModel",
                           #impute ranks by adding rank by number of experiments to baseline executed configuration
                           exps_na       <- is.na(experiments[i,])
                           rank_exps_na  <- rank(na_by_conf[exps_na])
-                          experiments[i,exps_na] = max(experiments[i,], na.rm=TRUE) + rank_exps_na
+                          experiments[i,exps_na] = max(experiments[i, which(experiments[i,] < Inf)]) + rank_exps_na
                         }
                         return(experiments)
                       },
