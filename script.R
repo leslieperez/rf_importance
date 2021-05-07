@@ -1,6 +1,6 @@
 #source("model_scripts/RFModel.R")
-source("model_scripts/RFQModel.R")
-#source("model_scripts/RFRModel.R")
+#source("model_scripts/RFQModel.R")
+source("model_scripts/RFRModel.R")
 #source("model_scripts/RFRQModel.R")
 
 load("irace_data/irace-acotsp1000-4500-1.Rdata")
