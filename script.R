@@ -13,8 +13,8 @@ parameters <- iraceResults$parameters
 scenario <- iraceResults$scenario
 
 #model = RFModel$new(300, iraceResults$parameters, iraceResults$scenario)
-model = RFQModel$new(300, iraceResults$parameters, iraceResults$scenario)
-#model = RFRModel$new(300, iraceResults$parameters, iraceResults$scenario)
+#model = RFQModel$new(300, iraceResults$parameters, iraceResults$scenario)
+model = RFRModel$new(300, iraceResults$parameters, iraceResults$scenario)
 #model = RFRQModel$new(300, iraceResults$parameters, iraceResults$scenario)
 
 configurations = iraceResults$allConfigurations
