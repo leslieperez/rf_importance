@@ -22,6 +22,6 @@ experiments = iraceResults$experiments
 
 model$trainModel(configurations, experiments, add.instance=TRUE)
 
-save(model, experiments, configurations, parameters, scenario, file="model_data/modelq-acotsp1000-4500.Rdata")
+save(model, experiments, configurations, parameters, scenario, file="model_data/modelr-acotsp1000-4500.Rdata")
 #save(model, experiments, configurations, parameters, scenario, file="model_data/model-acotsp2000-qranking.Rdata")
 
