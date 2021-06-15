@@ -1,5 +1,5 @@
 # Three parameters are important (x1,x4,x5)
-# name  base  weight    target  interaction (optional)
+# name  base  weight    target  | interaction (optional)
 x1  10  2   (2)     
 x2  10  2   (1,2,3)
 x3  10  2   (0,1)

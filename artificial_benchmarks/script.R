@@ -6,9 +6,9 @@ le <- Landscape$new("landscapes/parameters-conditional.txt", "landscapes/simple-
 
 
 # create configuration
-x <- c(2,2,1,1,1)
+x <- c(1,2,1,1,1)
 names(x) <- le$pnames
-x<- le$checkConfig(x)
+x<- le$deactivateConfig(x)
 
 cat("Configuration: ", x, "\n")
 

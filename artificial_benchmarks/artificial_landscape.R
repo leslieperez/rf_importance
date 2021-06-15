@@ -1,22 +1,59 @@
 library("irace")
 library("R6")
 
+#' Landscape Class implementing a benchmark 
+#'
+#' @description
+#' The landscape has an irace parameter object associated. 
+#' Things to consider:
+#' \describe{
+#'   \item{}{This implementation considers a maximization problem}
+#'   \item{}{Conditional parameters do not contribute to the objective function value if they are not active}
+#' }
+#' The response of the objective function is determined by the contribution 
+#' of each parameter defined by:
+#' \describe{
+#'   \item{parameters:}{a parameter space definition in the format user by irace 
+#'    (readParameters function)}
+#'   \item{base:}{a base contribution of each parameter. Non active parameters
+#'    do not contribute to the objective value}
+#'   \item{weight:}{a weight to increment/decrease the contibution of a parameter 
+#'    when a target value us set}
+#'   \item{target:}{a set of target values (set for categorical and ordinal parameters,
+#'    a range within its domainfor numerical parameters)}
+#'   \item{conditional:}{a list that gives the parameters that are activated by the
+#'    key parameter}
+#'   \item{interaction:}{a list that conditionates the contibution of the key parameter
+#'    based on another parameter}
+#' }
+#'
+#' @details
+#' This class provides methods to evaluate configurations
 Landscape <- R6Class("Landscape",
                    public = list(
+                     #' @field parameters parameter definition object (irace format)
                      parameters = NULL,
-                     
+                     #' @field pnames Vector of parameter names
                      pnames = c(),
-                     
+                     #' @field rnames Vector of root parameter names
+                     rnames = c(),
+                     #' @field base Vector of base contributions of the parameters  
                      base = c(), 
-                     
+                     #' @field weight Vector of weights of the contributions of the parameters  
                      weight = c(),
-                     
+                     #' @field target List of the target values of the parameters (set for categorical 
+                     #' and ordered parameters and range for numerical)  
                      target = list(),
-                     
+                     #' @field interaction List of the interactions of contributions of the parameters  
                      interaction = list(),
-                     
+                     #' @field conditional List of conditional dependency of the parameters  
                      conditional = list(),
                      
+                     #' @description
+                     #' Create a new landscape object
+                     #' @param parameter_file String of the path to a parameter definition file
+                     #' @param landscape_file String of the path to a landscape definition file
+                     #' @return A new `Landscape` object.
                      initialize = function (parameter_file, landscape_file) {
                        file.check <- irace:::file.check
                        is.wholenumber <- irace:::is.wholenumber
@@ -89,13 +126,18 @@ Landscape <- R6Class("Landscape",
                        # make available conditionality
                        for (pname in self$pnames) {
                          dep <- self$parameters$depends[[pname]]
+                         if (length(dep)<1) self$rnames <- c(self$rnames, pname)
                          for(d in dep) {
                            self$conditional[[d]] <- unique(c(self$conditional[[d]], pname))
                          }
                        }
                      }, 
                      
-                     inTarget = function (value, pname) {
+                     #' @description
+                     #' Checks if a parameter value is in the target defined in landscape 
+                     #' @param value Parameter value to check
+                     #' @param pname Parameter name for which parameter value should be checked
+                     inTargetParam = function (value, pname) {
                        if(self$parameters$types[pname] == "c") {
                          aux <-  value %in% self$target[[pname]]
                        } else {
@@ -104,6 +146,25 @@ Landscape <- R6Class("Landscape",
                        return(aux)
                      },
                      
+                     #' @description
+                     #' Checks if a parameter value is in the target together with its interacting parameters
+                     #' @param pname Parameter name for which parameter value should be checked
+                     #' @param config Configuration to be evaluated
+                     inTargetAll = function(pname, config) {
+                       current.in.target <- self$inTargetParam(value=config[pname], pname=pname)
+                       if (!current.in.target) 
+                         return(FALSE)
+                       if (self$hasInteractions(pname)) {
+                         iname <- self$interaction[[pname]]
+                         ivalue <- config[iname]
+                         current.in.target <- current.in.target && self$inTargetParam(ivalue, iname)
+                       }
+                       return(current.in.target)
+                     },
+                     
+                     #' @description
+                     #' Checks if a parameter has interactions in the landscape
+                     #' @param pname Parameter name of the parameter to be checked
                      hasInteractions = function (pname) {
                        if (is.na(self$interaction[[pname]])) 
                          return(FALSE)
@@ -111,36 +172,39 @@ Landscape <- R6Class("Landscape",
                          return(TRUE)
                      },
                      
+                     #' @description
+                     #' Evaluates the contribution of  a parameter to the objective function  
+                     #' @param config Configuration to be evaluated
+                     #' @param pname Parameter name for which contribution should be evaluated
                      partialEval = function(config, pname) {
                        # If parameter is not active we return the base value
                        if (!self$isActive(pname, config))
                          return(0)
                        
                        value <- config[pname]
-                       current.in.target <- self$inTarget(value=value, pname=pname)
+                       current.in.target <- self$inTargetAll(pname=pname, config=config)
                        fx <- self$base[pname]
-                       if (self$hasInteractions(pname)) {
-                         iparam <- self$interaction[[pname]]
-                         ivalue <- config[iparam]
-                         if (current.in.target && self$inTarget(value=ivalue, pname=iparam)) {
-                           fx <- (fx * self$weight[pname])
-                         }
-                       } else if (current.in.target) {
-                         fx <- (fx * self$weight[pname])
-                       }
-                       return (fx)
+                       if (current.in.target) {
+                         fx <- (fx * self$getWeight(pname=pname, config=config))
+                       } 
+                       return(fx)
                      },
                      
+                     #' @description
+                     #' Evaluates a configuration on the objective function described by the landscape 
+                     #' @param config Configuration to be evaluated
                      getEval = function (config) {
                        fx <- 0
-                       for (pname in self$pnames) {
-                         if (self$isActive(pname, config)) {
-                           fx <- fx + self$partialEval(config, pname)
-                         }
+                       # sum the contribution of each root parameter
+                       for (pname in self$rnames) {
+                         fx <- fx + self$partialEval(config, pname)
                        }
                        return(fx)
                      },
                      
+                     #' @description
+                     #' Gets a Vector with the partial evaluations of all parameters in a configuration
+                     #' @param config Configuration to be evaluated
                      getPartialEval = function (config) {
                        fx <- c()
                        for (pname in self$pnames) {
@@ -149,6 +213,10 @@ Landscape <- R6Class("Landscape",
                        return(fx)
                      },
                      
+                     #' @description
+                     #' Checks if a parameter is active in a configuration
+                     #' @param config Configuration to be checked
+                     #' @param pname Parameter name that should be checked
                      isActive = function (pname, config)  {
                        condition <- self$parameters$conditions[[pname]]
                        if (isTRUE(condition)) 
@@ -158,20 +226,30 @@ Landscape <- R6Class("Landscape",
                        return(v)
                      },
                      
-                     sampleUnif = function (pname, n) {
+                     #' @description
+                     #' Generate a set of parameter values to evaluate a parameter. If the parameter is 
+                     #' categorical, the values correspond to the full domain. If the parameter is numerical
+                     #' the values are sampled uniformly at random and they include the upper and lower bound of the
+                     #' domain
+                     #' @param pname Parameter name for which contribution should be evaluated
+                     #' @param n Number of values to be obtained
+                     getValuesToEvaluate = function (pname, n) {
                        ptype <- self$parameters$types[pname]
                        pdomain <- as.numeric(self$parameters$domain[[pname]])
                        if (ptype=="i") {
-                         values <- unique(c(round(runif(n, min=pdomain[1], max=pdomain[2])), pdomain))
+                         values <- unique(c(round(runif(n-2, min=pdomain[1], max=pdomain[2])), pdomain))
                        } else if (ptype == "r") {
-                         values <- unique(c(runif(n, min=pdomain[1], max=pdomain[2]), pdomain))
+                         values <- unique(c(runif(n-2, min=pdomain[1], max=pdomain[2]), pdomain))
                        } else {
                          values <- pdomain
                        }
                        return(values)
                      },
                      
-                     checkConfig = function (config) {
+                     #' @description
+                     #' Sets as NA  all non active parameters
+                     #' @param config Configuration to be corrected
+                     deactivateConfig = function (config) {
                        for (pname in self$pnames) {
                          if(!self$isActive(pname, config)) 
                            config[pname] <- NA
@@ -194,8 +272,38 @@ Landscape <- R6Class("Landscape",
                          }
                          cat("\n")
                        }
-                     }
+                     },
                      
+                     #' @description
+                     #' Checks if a parameter activates conditional parameters 
+                     #' @param pname Parameter value to check
+                     hasConditionals = function(pname) {
+                       if (pname %in% names(self$conditional))
+                         return(TRUE)
+                       return(FALSE)
+                     },
+                     
+                     getWeight = function(pname, config) {
+                       # parameter is not active
+                       if (!self$isActive(pname, config))
+                         return(0)
+                       
+                       # check if the parameter defines conditional parameters
+                       if (!self$hasConditionals(pname)) {
+                         # parameter does not have conditionals
+                         if (self$inTargetAll(pname=pname, config=config)) {
+                           return(self$weight[pname])
+                         }
+                         return(1)
+                       } else {
+                         w <- 1;
+                         for (cname in self$conditional[[pname]]) {
+                           if (self$isActive(cname, config))
+                              w <- w * self$getWeight(cname, config)   
+                         }
+                         return(w)
+                       }
+                     }
                    ),
                    private = list(
                      field.match = function (line, pattern, delimited = FALSE, sep = "[[:space:]]") {
