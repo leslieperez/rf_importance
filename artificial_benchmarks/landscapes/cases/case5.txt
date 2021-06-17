@@ -1,0 +1,4 @@
+# name  base  weight    target  interaction (optional)
+x1  10   0  (2)     
+x2  10   1  (1,2) 
+x3  10   1  (1,2)

@@ -46,6 +46,8 @@ Landscape <- R6Class("Landscape",
                      target = list(),
                      #' @field interaction List of the interactions of contributions of the parameters  
                      interaction = list(),
+                     interacts = list(),
+                     
                      #' @field conditional List of conditional dependency of the parameters  
                      conditional = list(),
                      
@@ -85,12 +87,12 @@ Landscape <- R6Class("Landscape",
                          param.type <- self$parameters$types[param.name]
                          
                          # parameter base 
-                         result <- private$field.match (line, "[._[:digit:]]+")
+                         result <- private$field.match (line, "-?[._[:digit:]]+")
                          param.base <- suppressWarnings(as.numeric(result$match))
                          line <- result$line
                          
                          # parameter weight
-                         result <- private$field.match (line, "[._[:digit:]]+")
+                         result <- private$field.match (line, "-?[._[:digit:]]+")
                          param.weight <- suppressWarnings(as.numeric(result$match))
                          line <- result$line
                          
@@ -111,15 +113,23 @@ Landscape <- R6Class("Landscape",
                          if (!is.null(result$match) && nchar(result$match)) {
                            result <- private$field.match (line, ".*$", sep="")
                            line <- result$line
-                           self$interaction[[param.name]] <- result$match
-                           line <- result$line
+                           try(self$interaction[[param.name]] <- parse(text=result$match, keep.source = FALSE))
+                           if (!is.expression (self$interaction[[param.name]])) {
+                             print("Error: when parsing interaction")
+                             stop()
+                           }
+                           
                          } else{
                            self$interaction[[param.name]] <- NA
                          }
+                         
                          self$target[[param.name]] <- param.value
                          self$weight <- c(self$weight, param.weight)
                          self$base <- c(self$base, param.base)
                        }
+                       
+                       self$interacts <- lapply(self$interaction, all.vars)
+                       
                        private$assert(all(self$pnames %in% self$parameters$names))
                        names(self$base) <- names(self$weight) <- self$pnames
                        
@@ -151,13 +161,16 @@ Landscape <- R6Class("Landscape",
                      #' @param pname Parameter name for which parameter value should be checked
                      #' @param config Configuration to be evaluated
                      inTargetAll = function(pname, config) {
+                       if (!self$isActive(pname, config))
+                         return(FALSE)
                        current.in.target <- self$inTargetParam(value=config[pname], pname=pname)
                        if (!current.in.target) 
                          return(FALSE)
                        if (self$hasInteractions(pname)) {
-                         iname <- self$interaction[[pname]]
-                         ivalue <- config[iname]
-                         current.in.target <- current.in.target && self$inTargetParam(ivalue, iname)
+                          #cat(as.character(self$interaction[[pname]]), "->", config, "\n")
+                          v <- eval(self$interaction[[pname]], as.list(config))
+                          #print(v)
+                          current.in.target <- current.in.target && v
                        }
                        return(current.in.target)
                      },
@@ -166,7 +179,7 @@ Landscape <- R6Class("Landscape",
                      #' Checks if a parameter has interactions in the landscape
                      #' @param pname Parameter name of the parameter to be checked
                      hasInteractions = function (pname) {
-                       if (is.na(self$interaction[[pname]])) 
+                       if (length(self$interacts[[pname]])<=0) 
                          return(FALSE)
                        else
                          return(TRUE)
@@ -177,16 +190,16 @@ Landscape <- R6Class("Landscape",
                      #' @param config Configuration to be evaluated
                      #' @param pname Parameter name for which contribution should be evaluated
                      partialEval = function(config, pname) {
+                       fx <- 0 
                        # If parameter is not active we return the base value
                        if (!self$isActive(pname, config))
-                         return(0)
+                         return(fx)
                        
-                       value <- config[pname]
-                       current.in.target <- self$inTargetAll(pname=pname, config=config)
-                       fx <- self$base[pname]
-                       if (current.in.target) {
-                         fx <- (fx * self$getWeight(pname=pname, config=config))
-                       } 
+                       # When a parameter depends on another, contribution is 0
+                       if (length(self$parameters$depends[[pname]])>0)
+                         return(fx)
+                       
+                       fx <- (self$base[pname] * self$getWeight(pname=pname, config=config))
                        return(fx)
                      },
                      
@@ -210,6 +223,7 @@ Landscape <- R6Class("Landscape",
                        for (pname in self$pnames) {
                          fx <- c(fx , self$partialEval(config, pname))
                        }
+                       names(fx) <- self$pnames
                        return(fx)
                      },
                      
@@ -264,13 +278,14 @@ Landscape <- R6Class("Landscape",
                          cat("#   type: ", self$parameters$types[pname], "\n")
                          cat("#   base: ", self$base[pname], "\n")
                          cat("#   weight: ", self$weight[pname], "\n")
-                         cat("#   interaction: ", self$interaction[[pname]], "\n")
                          cat("#   target: ", self$target[[pname]][1])
                          if (length(self$target[[pname]])>1) {
                            for (i in 2:length(self$target[[pname]])) 
                               cat(", ",self$target[[pname]][i])
                          }
                          cat("\n")
+                         cat("#   interacts: ", as.character(self$interacts[[pname]]), "\n")
+                         cat("#   interaction: ", as.character(self$interaction[[pname]]), "\n")
                        }
                      },
                      
@@ -283,25 +298,60 @@ Landscape <- R6Class("Landscape",
                        return(FALSE)
                      },
                      
+                     getConfiguration = function(config) {
+                       names(config) <- self$pnames
+                       x <- self$deactivateConfig(config)
+                       return(x)
+                     },
+                     
                      getWeight = function(pname, config) {
-                       # parameter is not active
+                       # parameter is not active, so it does not have weight
                        if (!self$isActive(pname, config))
-                         return(0)
+                         return(1)
                        
                        # check if the parameter defines conditional parameters
                        if (!self$hasConditionals(pname)) {
-                         # parameter does not have conditionals
+                         # parameter does not have conditionals to checked
                          if (self$inTargetAll(pname=pname, config=config)) {
                            return(self$weight[pname])
                          }
                          return(1)
                        } else {
-                         w <- 1;
+                         # parameter has conditionals to be first checked
+                         w <- 1
+                         if (self$inTargetAll(pname=pname, config=config)){
+                            w <- self$weight[pname]
+                         }
                          for (cname in self$conditional[[pname]]) {
-                           if (self$isActive(cname, config))
-                              w <- w * self$getWeight(cname, config)   
+                           if (self$isActive(cname, config)) {
+                              w <- w * self$getWeight(cname, config)
+                           }
                          }
                          return(w)
+                       }
+                     },
+                     
+                     getWeights = function(config) {
+                       allw <- c()
+                       for (pname in self$pnames) {
+                         allw <- c(allw, self$getWeight(pname, config))
+                       }
+                       names(allw) <- self$pnames
+                       return(allw)
+                     },
+                     
+                     listAll = function() {
+                       domains <- list()
+                       for (pname in self$parameters$names) {
+                         domains[[pname]] <- self$getValuesToEvaluate(pname = pname, n=3)
+                       }
+                       
+                       x <- rep(NA, length(self$pnames))
+                       names(x) <- self$pnames
+                       
+                       all.config <- private$listx(current=x, configs=NULL, domains=domains, cnames=self$parameters$names)
+                       for(config in all.config){
+                         cat(config, " : ", self$getEval(config), "\n")
                        }
                      }
                    ),
@@ -369,6 +419,31 @@ Landscape <- R6Class("Landscape",
                        print(msg)
                        invisible()
                        stop()
+                     },
+                     
+                     listx = function(current, configs, domains, cnames) {
+                       if(is.null(configs))
+                         configs <- list()
+                       
+                       if (length(cnames) <1) {
+                         configs[[length(configs)+1]] <- current
+                         return(configs)
+                       }
+                       
+                       cname <- cnames[1]
+                       
+                       if (!self$isActive(cname, current)) {
+                         current[cname] <- NA
+                         new.names <- cnames[!(cnames %in% cname)]
+                         configs <-private$listx(current=current, configs=configs, domains=domains, cnames=new.names)
+                       } else {
+                         for(v in domains[[cname]]) {
+                           current[cname] <- v
+                           new.names <- cnames[!(cnames %in% cname)]
+                           configs <- private$listx(current=current, configs=configs, domains=domains, cnames=new.names)
+                         }
+                       }
+                       return(configs)
                      }
                      
                    )

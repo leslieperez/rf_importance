@@ -2,6 +2,7 @@ source("artificial_landscape.R")
 source("importance.R")
 
 le <- Landscape$new("landscapes/parameters-conditional.txt", "landscapes/simple-conditional-landscape1.txt")
+le <- Landscape$new("landscapes/cases/param1.txt", "landscapes/cases/case1.txt")
 #le$print()
 
 
