@@ -309,6 +309,7 @@ RFRModel <- R6Class("RFRModel",
                         
                         if (length(experiment) < 1)
                           return
+                       not.inf.na <- !is.infinite(experiment) & !is.na(experiment)
                         all.configurations <- configurations[not.inf.na,]
                         
                         # apply rank
