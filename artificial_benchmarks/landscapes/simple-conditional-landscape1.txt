@@ -1,0 +1,7 @@
+# One conditional parameter is important (x4)
+# name  base  weight    target  interaction (optional)
+x1  10  2   (1,2)     
+x2  10  2   (1,2,3)
+x3  10  2   (0,1)
+x4  0  2    (0,0.5)
+x5  10  2   (1,10)
