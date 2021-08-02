@@ -1,27 +1,53 @@
-#source("model_scripts/RFModel.R")
-#source("model_scripts/RFQModel.R")
-source("model_scripts/RFRModel.R")
-#source("model_scripts/RFRQModel.R")
+source("model_scripts/DataHandling.R")
+source("model_scripts/RFModel.R")
 
-load("irace_data/irace-acotsp1000-4500-1.Rdata")
-#load("irace_data/irace-acotsp1000-4500-low-budget.Rdata")
-#load("irace_data/irace-acotsp2000-exp-num.Rdata")
+# * Mtype: type of MODEL to build: 
+#    - perf: performance (raw)
+#    - norm: performance (normalized)
+#    - quan: performance quartile
+#    - rank: ranking (normalized)
+#    - irank: ranking (including imputation)
+#    - qrank: ranking quartile (including imputation)
+train_and_save <- function (mtype, irace_file, save_file){
+  load(irace_file)
+  
+  parameters <- iraceResults$parameters
+  scenario <- iraceResults$scenario
+  configurations <- iraceResults$allConfigurations
+  experiments <- iraceResults$experiments
+  
+  model = RFModel$new(300, iraceResults$parameters, iraceResults$scenario)
+  
+  
+  #    - perf: performance (raw)
+  #    - norm: performance (normalized)
+  #    - quan: performance quantile
+  #    - rank: ranking (normalized)
+  #    - irank: ranking (including imputation)
+  #    - qrank: ranking quantile (including imputation)
+  data = createData (configurations, experiments, add.dummy = TRUE , add.instance=TRUE, 
+                     data.type = mtype , parameters = parameters)
+  
+  model$trainModel(data)
+  
+  cat("# Saving model..\n")
+  save(model, experiments, configurations, parameters, scenario, file= save_file)
+}
+
+args = commandArgs(trailingOnly=TRUE)
+
+
+mtype <- "perf"
+irace_file <- "irace_data/irace-acotsp1000-4500-1.Rdata"
+save_file <- "model_data/model-acotsp1000-4500-performance.Rdata"
+
+if( length(args)>0) {
+  mtype <- args[1]
+  irace_file <- args[2]
+  save_file <- args[3]
+  train_and_save(mtype, irace_file, save_file)
+}
 
 
 
-parameters <- iraceResults$parameters
-scenario <- iraceResults$scenario
-
-#model = RFModel$new(300, iraceResults$parameters, iraceResults$scenario)
-#model = RFQModel$new(300, iraceResults$parameters, iraceResults$scenario)
-model = RFRModel$new(300, iraceResults$parameters, iraceResults$scenario)
-#model = RFRQModel$new(300, iraceResults$parameters, iraceResults$scenario)
-
-configurations = iraceResults$allConfigurations
-experiments = iraceResults$experiments
-
-model$trainModel(configurations, experiments, add.instance=TRUE)
-
-save(model, experiments, configurations, parameters, scenario, file="model_data/modelr-acotsp1000-4500.Rdata")
-#save(model, experiments, configurations, parameters, scenario, file="model_data/model-acotsp2000-qranking.Rdata")
 

@@ -55,8 +55,8 @@ RFModel <- R6Class("RFModel",
                      # order in which the parameters should be sampled if considered the current 
                      # interactions in interactions_frame
                      sampling.order = c(),
-                     
-                     initialize = function(n_trees, parameters, scenario){
+  
+                     initialize = function(n_trees, parameters, scenario) {
                        private$n_trees = n_trees
                        private$parameters = parameters
                        private$id_seed = scenario$seed
@@ -69,10 +69,7 @@ RFModel <- R6Class("RFModel",
                      # * experiments: experiment data frame
                      # * add.dummy: add a dummy predictor to the data set (used as reference variable)
                      # * add.instance: add instance as predictor in the data set
-                     trainModel = function(configurations, experiments, add.dummy = TRUE, add.instance=TRUE) {
-                       # create, filter and impute training data
-                       cat("# Creating training data...\n")
-                       data <- private$createData (configurations, experiments, add.dummy = add.dummy , add.instance=add.instance)
+                     trainModel = function(data) {
                        self$training_data <- data
 
                        if (is.null(data)) {
@@ -93,7 +90,7 @@ RFModel <- R6Class("RFModel",
                        # this parameter can be used to discriminate real interactions.
                        # IMPORTANT: this parameter should be added to the data set as a random uniformly sampled 
                        # predictor
-                       if (add.dummy && !("dummy" %in% self$important_parameters)) {
+                       if (("dummy" %in% colnames(self$training_data$data)) && !("dummy" %in% self$important_parameters)) {
                          cat("# Adding dummy reference parameter for interaction calculation ...\n")
                          self$important_parameters <- c(self$important_parameters, "dummy")
                        }
@@ -211,174 +208,6 @@ RFModel <- R6Class("RFModel",
                      imeasures = c("mean_min_depth", "mse_increase", "times_a_root"),
                      
                      ####################################################################
-                     ################### data manipulation functions ####################
-                     ####################################################################
-                     
-                     # Function createData generates a data set for training a random forest model
-                     # * configurations: configurations data frame
-                     # * experiments: experiments data set
-                     # * remove.na.from: vector of parameter names to indicate the removal of rows with NA values 
-                     # * add.dummy: bool, adding a dummy predictor to be used as reference
-                     # * add.instance: bool, addind the instance as a predictor
-                     createData = function(configurations, experiments, remove.na.from=NULL, add.dummy=FALSE, add.instance=TRUE) {
-                       cat("#   creating training data...\n")
-                       # Drop not used columns (.ID., .PARENT.)
-                       configurations <- configurations[, grep("^\\.", colnames(configurations), invert = TRUE),drop = FALSE]
-                       rownames(configurations) <- NULL
-                       
-                       # Filter variables that are all NA (currently not supported)
-                       configurations <- private$filterNACols(configurations)
-                       if (ncol(configurations) < 2) {
-                         cat ("# Only ", ncol(configurations)," parameters of the training ",
-                              "data have NA values. Cannot train model.\n")
-                         self$importance_frame <- NULL
-                         self$important_parameters <- c()
-                         return(NULL)
-                       }
-                       
-                       # Filter NA rows for parameters in remove.na.from
-                       if (!is.null(remove.na.from)) {
-                         cat("#   removing NA rows from", remove.na.from,"\n")
-                         for (p in remove.na.from) {
-                           index <- !is.na(configurations[,p])
-                           configurations <- configurations[index, ,drop=FALSE]
-                           experiments    <- experiments[,index, drop=FALSE]
-                         }
-                       }
-                       if (nrow(configurations) < 2 || ncol(experiments) < 2) {
-                         cat ("# Not enough data to train model after removal of configurations with ",
-                              "parameters ",remove.na.from," set to NA\n")
-                         self$importance_frame <- NULL
-                         self$important_parameters <- c()
-                         return(NULL)
-                       } 
-                       
-                       # Filter variables that have only one value
-                       uvalues <- apply(configurations, 2, function(x) length(unique(x)))
-                       non.equal <- names(uvalues)[uvalues != 1]
-                       if (length(non.equal)<1) {
-                         cat ("# Not enough data to train model after removal of ",
-                              "parameters having only one value in the training set\n")
-                         self$importance_frame <- NULL
-                         self$important_parameters <- c()
-                         return(NULL)
-                       } else {
-                         cat ("#   only parameters ", non.equal, " have more than one value for training model\n")
-                         configurations <- configurations[, non.equal, drop=FALSE]
-                       }
-                       
-                       # Adding dummy parameter to filter non-important parameters and interactions
-                       if (add.dummy) {
-                         pnames <- colnames(configurations)
-                         configurations <- cbind(sample(x = 1:10, size = nrow(configurations), replace = TRUE) ,configurations)
-                         colnames(configurations) <- c("dummy", pnames)
-                       }
-                       
-                       pnames     <- colnames(configurations)
-                       inames     <- NULL
-                       
-                       lapply(1:nrow(experiments), private$dataNameBind, experiments=experiments, 
-                              configurations=configurations, add.instance=add.instance)
-                       data <- read.table(paste("rf-",private$id_seed,"-data.txt",sep=""), 
-                                          header=TRUE, sep=":", stringsAsFactors=FALSE)
-                       data <- private$doImputeCols(data) 
-
-                       # Adding instances to the data set
-                       if (add.instance){
-                         data[,"instance"] = as.factor(data[,"instance"])
-                         final.data <- list(data=data, pnames=c(pnames,"instance"))
-                       }else {
-                         final.data <- list(data=data, pnames=pnames)
-                       }
-                       return(final.data)
-                     }, 
-                     
-                     # Function dataNameBind generates a dataset file 
-                     # * index: experiment index to add to the file
-                     # * expeirments: experiments data frame
-                     # * configurations: configurations data frame
-                     # * file: filename to which data entries should be added
-                     # * add.instance:  bool, adding instance as a predictor variable
-                     dataNameBind = function (index, experiments, configurations, file=paste("rf-",private$id_seed,"-data.txt",sep=""), add.instance=TRUE) {
-                       
-                       # get experiment data 
-                       experiment <- experiments[index,]
-                       
-                       #remove infinite and NA experiments (rejected)
-                       not.inf.na <- !is.infinite(experiment) & !is.na(experiment)
-                       experiment <- experiment[not.inf.na]
-                       if (length(experiment) < 1)
-                         return
-                       all.configurations <- configurations[not.inf.na,]
-                       
-                       # add instance as predictor and join data
-                       if (add.instance) {
-                         all.instances  <- matrix(paste("instance",index,sep=""), ncol=1, nrow=length(experiment))
-                         data           <- cbind(all.configurations, all.instances, experiment)
-                         colnames(data) <- c(colnames(all.configurations), "instance", ".PERFORMANCE.")
-                       } else {
-                         data           <- cbind(all.configurations, experiment)
-                         colnames(data) <- c(colnames(all.configurations), ".PERFORMANCE.")
-                       }
-                       
-                       # Write lines (data entries) to the file
-                       if (index==1)
-                         write.table(data, append=FALSE, sep=":", row.names=FALSE, col.names=TRUE, quote=FALSE, file=file)
-                       else
-                         write.table(data, append=TRUE, sep=":", row.names=FALSE, col.names=FALSE, quote=FALSE, file=file)
-                     },
-                     
-                     # Function doImputeCols imputes parameter configuration data. Categorical variables are imputed as 
-                     # __miss__ and numerical as the domain upper bound * 2
-                     # * data: data frame with data entries
-                     # * pnames: parameter names to be considered in the imputation
-                     doImputeCols = function(data, pnames=NULL) {
-                       cat("#   imputing parameter data...\n")
-                       
-                       if(is.null(pnames))
-                         pnames <- private$parameters$names  
-                       
-                       for (pname in pnames) {
-                         if (!(pname %in% colnames(data))) {
-                           cat("#   skipping imputation of ", pname, "\n")
-                           next;
-                         }
-                         sel <- is.na(data[,pname])
-                         if (sum(sel) >= 1) {
-                           cat("#   imputing", sum(sel),"/",length(sel),"values in", pname, "type", private$parameters$types[pname],"\n")
-                           if (private$parameters$types[pname] %in% c("r","i", "ilog", "rlog")) {
-                             data[sel ,pname] <- private$parameters$domain[[pname]][2] * 2
-                           } else if (private$parameters$types[pname] %in% c("c","o")) {
-                             data[,pname] <- as.character(data[,pname])
-                             data[sel ,pname] <- rep("__miss__", sum(sel))
-                           }
-                         }
-                         
-                         if (private$parameters$types[pname] %in% c("c","o")) {
-                           data[,pname] <- factor(data[,pname], ordered=FALSE)
-                         }
-                       }
-                       
-                       if (".PERFORMANCE." %in% colnames(data)){
-                         data[,".PERFORMANCE."] <- as.numeric(data[,".PERFORMANCE."])
-                       }
-                       return(data)
-                     },
-                     
-                     # Function filterNACols remove columns (parameters) that only have NA values
-                     # * configurations: configurations data frame
-                     filterNACols = function(configurations) {
-                       all.na <- which(colSums(is.na(configurations)) == nrow(configurations))
-                       
-                       if (length(all.na)>0) {
-                         cat("Warning: Removing parameters with only NA values ", colnames(configurations)[all.na], "\n")
-                         pnames <- colnames(configurations)[-all.na]
-                         configurations <- configurations[,pnames, drop=FALSE]
-                       }
-                       return(configurations)
-                     },
-                     
-                     ####################################################################
                      ############# importance and interaction funcions ##################
                      ####################################################################
                      
@@ -408,7 +237,7 @@ RFModel <- R6Class("RFModel",
                        
                        # calculate interactions between parameters
                        self$important_parameters <- params[!(params %in% pnames.to.remove)]
-                       cat("#   important parameters after conditional removal: ", self$important_parameters,"\n")
+                       cat("# Important parameters after conditional removal: ", self$important_parameters,"\n")
                      },
                      
                      # function that returns a vector of important parameters
@@ -423,7 +252,7 @@ RFModel <- R6Class("RFModel",
                      # interaction between these two variables without having a hierarchical
                      # relationship in this interaction)
                      aggregateInteractions = function() {
-                       cat("#   aggregating reversed interactions...\n")
+                       cat("# Aggregating reversed interactions...\n")
                        not.search = c()
                        self$full_interactions_frame = self$interactions_frame
                        for(i in 1:nrow(self$interactions_frame)) {
@@ -451,10 +280,10 @@ RFModel <- R6Class("RFModel",
                      calculateInteractions = function(remove.inversed=FALSE, aggregate.inversed=TRUE) {
                        # calculate interactions
                        if (length(self$important_parameters)>0) {
-                         cat ("#   calculating interactions between selected parameters: ", self$important_parameters, "\n" )
+                         cat ("# Calculating interactions between selected parameters: ", self$important_parameters, "\n" )
                          self$interactions_frame <- randomForestExplainer::min_depth_interactions(self$model, self$important_parameters)
                        } else {
-                         cat ("#   calculating interactions between all parameters\n")
+                         cat ("# Calculating interactions between all parameters\n")
                          self$interactions_frame <- randomForestExplainer::min_depth_interactions(self$model)
                        }
                        # order them by number of occurrence of the interactions in the trees
@@ -574,17 +403,18 @@ RFModel <- R6Class("RFModel",
                      isConditionalImportant = function (pname, configurations, experiments) {
                        if (length(private$parameters$depends[[pname]]) > 0){
                          # remove NA rows from the data and check if the parameter is still is important
-                         aux.data <- private$createData (configurations, experiments, remove.na.from=pname, add.dummy = TRUE)
+                         aux.data <- reduceData(self$training_data, parameters=parameters, remove.na.from=pname)
+                         #aux.data <- private$createData (configurations, experiments, remove.na.from=pname, add.dummy = TRUE)
                          if (is.null(aux.data)) {
                            # this should not happen, if it is the case, the parameter
                            # has only NA values
                            return(FALSE)
                          }
                          
-                         cat("#   evaluating conditional parameter ", pname, " importance with parameters ",aux.data$pnames, "\n")
+                         cat("# Evaluating conditional parameter ", pname, " importance with parameters ",aux.data$pnames, "\n")
                          aux.model <- randomForest::randomForest(x=aux.data$data[,aux.data$pnames], y=aux.data$data$.PERFORMANCE., 
                                                    importance=TRUE, localImp = TRUE, ntree=private$n_trees)
-                         cat("#   calculating importance of",pname," \n") 
+                         cat("# Calculating importance of",pname," \n") 
                          aux.importance_frame <- randomForestExplainer::measure_importance(aux.model)
                          aux.params <- randomForestExplainer::important_variables(aux.importance_frame, k = private$n_imp_par, 
                                                            measures = private$imeasures)
@@ -613,7 +443,7 @@ RFModel <- R6Class("RFModel",
                        for (child in vars) {
                          # The following line detects cycles
                          if (child == rootParam)
-                           irace.error("A cycle detected in subordinate sampling model parameters! ",
+                           stop("A cycle detected in subordinate sampling model parameters! ",
                                        "One parameter of this cycle is '", rootParam, "'")
                          
                          level <- private$treeLevel(child, varsTree, rootParam)
