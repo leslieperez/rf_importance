@@ -1,0 +1,24 @@
+#+Title: fANOVA on irace data
+#+Author: Marcus Ritt
+#+Date: <2021-07-27 ter>
+
+* Setup
+
+  1. Clone fanova, https://github.com/automl/fanova, follow the setup setup steps.
+  2. Run the data exporter, e.g.
+     #+begin_src sh
+     ./export.R ../irace_data/irace-acotsp1000-4500-1.Rdata
+     #+end_src
+  3. Create an output directory for the plots, and run the functional ANOVA:
+     #+begin_src sh
+     mkdir plot
+     ./process.py
+     #+end_src
+     This will produce `importance.dat` and the plots.
+
+# Local Variables:
+# auto-fill-function: do-auto-fill
+# ispell-local-dictionary: "english"
+# fill-column: 20000
+# eval: (visual-line-mode t)
+# End:
