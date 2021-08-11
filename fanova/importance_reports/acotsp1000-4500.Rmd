@@ -1,0 +1,61 @@
+---
+title: "ACOTSP 1000--4500 Estimation of parameter importance with fANOVA"
+author: "Marcus Ritt"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(kableExtra)
+```
+
+(We focus for now on the acotps1000-4500-1 data set.)
+
+## 1. Dependent variable: raw performance
+
+```{r}
+readImportance <- function(fname) {
+  data=read.table(fname,h=T) %>% select(parameter,ind_imp,ind_std) %>% arrange(-ind_imp)
+  colnames(data)=c("variable","importance","std_dev")
+  return(data)
+}
+
+data=readImportance("irace-acotsp1000-4500-1-perf-importance.dat")
+kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+```
+
+## 2. Dependent variable: normalized performance
+
+```{r}
+data=readImportance("irace-acotsp1000-4500-1-norm-importance.dat")
+kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+```
+
+## 3. Dependent variable: performance quantile
+
+```{r}
+data=readImportance("irace-acotsp1000-4500-1-quan-importance.dat")
+kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+```
+
+## 4. Dependent variable: normalized ranking
+
+```{r}
+data=readImportance("irace-acotsp1000-4500-1-rank-importance.dat")
+kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+```
+
+## 5. Dependent variable: normalized ranking with imputation
+
+```{r}
+data=readImportance("irace-acotsp1000-4500-1-irank-importance.dat")
+kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+```
+
+## 6. Dependent variable: ranking quartile with imputation
+
+```{r}
+data=readImportance("irace-acotsp1000-4500-1-qrank-importance.dat")
+kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+```
