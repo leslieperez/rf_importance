@@ -102,7 +102,28 @@ important_parameters = model$important_parameters
 full_interactions_frame = model$full_interactions_frame
 interactions_frame = model$interactions_frame
 kable(importance_frame[order(importance_frame[,"mean_min_depth"]),])  %>%  
-      kable_styling(latex_options="scale_down")
+      kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
+```
+
+Ordered importance measures: 
+```{r}
+imp <- model$importance_frame
+imp[,"variable"] <- as.character(imp[,"variable"])
+ordered_imp <- matrix(NA, nrow=nrow(imp), ncol=ncol(imp)-2)
+measures <- colnames(imp)[!(colnames(imp) %in% c("variable", "p_value"))]
+colnames(ordered_imp) <- measures
+ordered_imp[,"mean_min_depth"] <- imp[,"variable"][order(imp[,"mean_min_depth"])]
+ordered_imp[,"no_of_nodes"] <- imp[,"variable"][order(imp[,"no_of_nodes"], decreasing=TRUE)]
+ordered_imp[,"mse_increase"] <- imp[,"variable"][order(abs(imp[,"mse_increase"]), decreasing=TRUE)]
+ordered_imp[,"node_purity_increase"] <- imp[,"variable"][order(imp[,"node_purity_increase"], decreasing=TRUE)]
+ordered_imp[,"no_of_trees"] <- imp[,"variable"][order(imp[,"no_of_trees"], decreasing=TRUE)]
+ordered_imp[,"times_a_root"] <- imp[,"variable"][order(imp[,"times_a_root"], decreasing=TRUE)]
+kable(ordered_imp) %>%  
+      kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
 We can plot two importance measures using the randomForestExplainer package, we choose the to show the 
@@ -146,7 +167,10 @@ in its conditional version.
 
 Parameter interaction importance:
 ```{r}
-kable(full_interactions_frame)  %>%  kable_styling(latex_options="scale_down")
+kable(full_interactions_frame)  %>%  
+  kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
 For this example we aggregate bidirectional (`param1:param2` and `param2:param2`) interactions, 
@@ -157,7 +181,10 @@ of most relevant interactions is summarized.
 
 Relevant parameter interactions:
 ```{r}
-kable(interactions_frame) %>% kable_styling(latex_options="scale_down")
+kable(interactions_frame) %>% 
+  kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
 
@@ -177,9 +204,29 @@ important_parameters = model$important_parameters
 full_interactions_frame = model$full_interactions_frame
 interactions_frame = model$interactions_frame
 kable(importance_frame[order(importance_frame[,"mean_min_depth"]),])  %>%  
-      kable_styling(latex_options="scale_down")
+      kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
+Ordered importance measures: 
+```{r}
+imp <- model$importance_frame
+imp[,"variable"] <- as.character(imp[,"variable"])
+ordered_imp <- matrix(NA, nrow=nrow(imp), ncol=ncol(imp)-2)
+measures <- colnames(imp)[!(colnames(imp) %in% c("variable", "p_value"))]
+colnames(ordered_imp) <- measures
+ordered_imp[,"mean_min_depth"] <- imp[,"variable"][order(imp[,"mean_min_depth"])]
+ordered_imp[,"no_of_nodes"] <- imp[,"variable"][order(imp[,"no_of_nodes"], decreasing=TRUE)]
+ordered_imp[,"mse_increase"] <- imp[,"variable"][order(abs(imp[,"mse_increase"]), decreasing=TRUE)]
+ordered_imp[,"node_purity_increase"] <- imp[,"variable"][order(imp[,"node_purity_increase"], decreasing=TRUE)]
+ordered_imp[,"no_of_trees"] <- imp[,"variable"][order(imp[,"no_of_trees"], decreasing=TRUE)]
+ordered_imp[,"times_a_root"] <- imp[,"variable"][order(imp[,"times_a_root"], decreasing=TRUE)]
+kable(ordered_imp) %>%  
+      kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
+```
 
 We plot importance as above to visualize how the mse increase and mean min depth are 
 related:
@@ -207,7 +254,10 @@ print(important_parameters)
 
 Parameter interaction importance:
 ```{r}
-kable(full_interactions_frame)  %>%  kable_styling(latex_options="scale_down")
+kable(full_interactions_frame)  %>%  
+  kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
 For this example we aggregate bidirectional (`param1:param2` and `param2:param2`) interactions, 
@@ -218,7 +268,10 @@ of most relevant interactions is summarized.
 
 Relevant parameter interactions:
 ```{r}
-kable(interactions_frame) %>% kable_styling(latex_options="scale_down")
+kable(interactions_frame) %>% 
+  kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
 # 3.Configuration imputed ranking quantile as dependent variable
@@ -240,7 +293,28 @@ full_interactions_frame = model$full_interactions_frame
 interactions_frame = model$interactions_frame
 important_parameters = model$important_parameters
 kable(importance_frame[order(importance_frame[,"mean_min_depth"]),]) %>%
-      kable_styling(latex_options="scale_down")
+      kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
+```
+
+Ordered importance measures: 
+```{r}
+imp <- model$importance_frame
+imp[,"variable"] <- as.character(imp[,"variable"])
+ordered_imp <- matrix(NA, nrow=nrow(imp), ncol=ncol(imp)-2)
+measures <- colnames(imp)[!(colnames(imp) %in% c("variable", "p_value"))]
+colnames(ordered_imp) <- measures
+ordered_imp[,"mean_min_depth"] <- imp[,"variable"][order(imp[,"mean_min_depth"])]
+ordered_imp[,"no_of_nodes"] <- imp[,"variable"][order(imp[,"no_of_nodes"], decreasing=TRUE)]
+ordered_imp[,"mse_increase"] <- imp[,"variable"][order(abs(imp[,"mse_increase"]), decreasing=TRUE)]
+ordered_imp[,"node_purity_increase"] <- imp[,"variable"][order(imp[,"node_purity_increase"], decreasing=TRUE)]
+ordered_imp[,"no_of_trees"] <- imp[,"variable"][order(imp[,"no_of_trees"], decreasing=TRUE)]
+ordered_imp[,"times_a_root"] <- imp[,"variable"][order(imp[,"times_a_root"], decreasing=TRUE)]
+kable(ordered_imp) %>%  
+      kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
 As expected the instance is the most important variable, the other parameters do not 
@@ -279,7 +353,10 @@ This is done by extending the definition of mean_min_depth to be calculated in m
 variable is root.
 
 ```{r}
-kable(full_interactions_frame)  %>%  kable_styling(latex_options="scale_down")
+kable(full_interactions_frame)  %>%  
+  kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
 We aggregate interactions with their inverse given that for now we are not interested
@@ -288,6 +365,9 @@ and filter dummy interactions, we get a matrix where the relevant importance of
 interactions are summarized:
 
 ```{r}
-kable(interactions_frame)  %>%  kable_styling(latex_options="scale_down")
+kable(interactions_frame)  %>%  
+  kable_styling(latex_options="scale_down") %>%
+  kable_styling(latex_options = "HOLD_position")
+
 ```
 
