@@ -69,7 +69,7 @@ RFModel <- R6Class("RFModel",
                      # * experiments: experiment data frame
                      # * add.dummy: add a dummy predictor to the data set (used as reference variable)
                      # * add.instance: add instance as predictor in the data set
-                     trainModel = function(data) {
+                     trainModel = function(data, conditionals=FALSE, interaction=FALSE) {
                        self$training_data <- data
 
                        if (is.null(data)) {
@@ -84,27 +84,28 @@ RFModel <- R6Class("RFModel",
                                                   importance=TRUE, localImp = TRUE, ntree=private$n_trees)
                        
                        cat("# Identifying important parameters ...\n")
-                       private$identifyImportantParameters(configurations, experiments)
+                       private$identifyImportantParameters(configurations, experiments, conditionals=conditionals)
                        
-                       # If enforced, a dummy reference parameter is added to the list of important parameters
-                       # this parameter can be used to discriminate real interactions.
-                       # IMPORTANT: this parameter should be added to the data set as a random uniformly sampled 
-                       # predictor
-                       if (("dummy" %in% colnames(self$training_data$data)) && !("dummy" %in% self$important_parameters)) {
-                         cat("# Adding dummy reference parameter for interaction calculation ...\n")
-                         self$important_parameters <- c(self$important_parameters, "dummy")
-                       }
+                       if (interaction) {
+                         # If enforced, a dummy reference parameter is added to the list of important parameters
+                         # this parameter can be used to discriminate real interactions.
+                         # IMPORTANT: this parameter should be added to the data set as a random uniformly sampled 
+                         # predictor
+                         if (("dummy" %in% colnames(self$training_data$data)) && !("dummy" %in% self$important_parameters)) {
+                           cat("# Adding dummy reference parameter for interaction calculation ...\n")
+                           self$important_parameters <- c(self$important_parameters, "dummy")
+                         }
                        
-                       if (length(self$important_parameters)>1) {
-                         # retrain the model
-                         cat("# Re-training model with important parameters:",self$important_parameters,"\n")
-                         self$model <- randomForest::randomForest(x=data$data[,self$important_parameters,drop=FALSE], 
+                         if (length(self$important_parameters)>1) {
+                           # retrain the model
+                           cat("# Re-training model with important parameters:",self$important_parameters,"\n")
+                           self$model <- randomForest::randomForest(x=data$data[,self$important_parameters,drop=FALSE], 
                                                                   y=data$data$.PERFORMANCE., importance=TRUE, localImp = TRUE, 
                                                                   ntree=private$n_trees)                       
+                         }
+                         cat("# Calculating interactions between important parameters...\n")
+                         private$calculateInteractions()
                        }
-                       cat("# Calculating interactions between important parameters...\n")
-                       private$calculateInteractions()
-                       
                        return (TRUE)
                      },
                      
@@ -214,7 +215,7 @@ RFModel <- R6Class("RFModel",
                      # function identifyImportantParameters fills the variable important_parameters
                      # receives as in input the set of configurations and experiments used to build
                      # self$model
-                     identifyImportantParameters = function(configurations, experiments, force.dummy=FALSE) {
+                     identifyImportantParameters = function(configurations, experiments, force.dummy=FALSE, conditionals=FALSE) {
                        # calculate parameter importance in the current model
                        self$importance_frame <- randomForestExplainer::measure_importance(self$model)
                        
@@ -222,22 +223,24 @@ RFModel <- R6Class("RFModel",
                        self$importance_frame <- self$importance_frame[order(self$importance_frame[,"mean_min_depth"]),]
                        print(self$importance_frame)
                        
-                       # get n_imp_par most important parameters
-                       params <- randomForestExplainer::important_variables(self$importance_frame, k = private$n_imp_par, 
+                       if (conditionals) {
+                         # get n_imp_par most important parameters
+                         params <- randomForestExplainer::important_variables(self$importance_frame, k = private$n_imp_par, 
                                                      measures = private$imeasures)
-                       #cat("Initial important parameters: ", params,"\n")
+                         #cat("Initial important parameters: ", params,"\n")
                        
-                       # check if there is conditional parameters between the important vars
-                       pnames.to.remove <- c()
-                       for (pname in params) {
-                         if (pname!="dummy" && !private$isConditionalImportant(pname, configurations, experiments)) {
-                           pnames.to.remove <- c(pnames.to.remove, pname)
-                         } 
+                         # check if there is conditional parameters between the important vars
+                         pnames.to.remove <- c()
+                         for (pname in params) {
+                           if (pname!="dummy" && !private$isConditionalImportant(pname, configurations, experiments)) {
+                             pnames.to.remove <- c(pnames.to.remove, pname)
+                           } 
+                         }
+                       
+                         # to later calculate interactions between parameters
+                         self$important_parameters <- params[!(params %in% pnames.to.remove)]
+                         cat("# Important parameters after conditional removal: ", self$important_parameters,"\n")
                        }
-                       
-                       # calculate interactions between parameters
-                       self$important_parameters <- params[!(params %in% pnames.to.remove)]
-                       cat("# Important parameters after conditional removal: ", self$important_parameters,"\n")
                      },
                      
                      # function that returns a vector of important parameters
@@ -403,7 +406,7 @@ RFModel <- R6Class("RFModel",
                      isConditionalImportant = function (pname, configurations, experiments) {
                        if (length(private$parameters$depends[[pname]]) > 0){
                          # remove NA rows from the data and check if the parameter is still is important
-                         aux.data <- reduceData(self$training_data, parameters=parameters, remove.na.from=pname)
+                         aux.data <- reduceData(self$training_data, parameters=private$parameters, remove.na.from=pname)
                          #aux.data <- private$createData (configurations, experiments, remove.na.from=pname, add.dummy = TRUE)
                          if (is.null(aux.data)) {
                            # this should not happen, if it is the case, the parameter
