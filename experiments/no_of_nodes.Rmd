@@ -1,0 +1,76 @@
+---
+title: "Number of nodes"
+author: "Leslie Pérez Cáceres"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(kableExtra)
+knitr::opts_chunk$set(echo = TRUE)
+source("scripts/gather.R")
+```
+
+## Raw importance 
+
+```{r out.width="100%", echo=FALSE}
+measures <- c("mean_min_depth", "mse_increase", "node_purity_increase", "times_a_root", "no_of_nodes")
+mindex <- 5
+res1 <- plotMeasureData("perf", measures[mindex])
+res1$p
+res2 <- plotMeasureData("norm", measures[mindex])
+res2$p
+res3 <- plotMeasureData("quan", measures[mindex])
+res3$p
+res4 <- plotMeasureData("irank", measures[mindex])
+res4$p
+res5 <- plotMeasureData("rank", measures[mindex])
+res5$p
+res6 <- plotMeasureData("qrank", measures[mindex])
+res6$p
+```
+
+
+## Importance correlation
+```{r out.width="100%", echo=FALSE}
+cmat <- rbind(correlationBySet(res1$data, TRUE),
+              correlationBySet(res2$data, TRUE),
+              correlationBySet(res3$data, TRUE),
+              correlationBySet(res4$data, TRUE),
+              correlationBySet(res5$data, TRUE),
+              correlationBySet(res6$data, TRUE))
+cmat <- cbind(cmat, rowMeans(cmat))
+colnames(cmat) <- c(paste("rep", 1:5), "mean")
+rownames(cmat) <- c("perf", "norm", "quan","irank", "rank", "qrank")
+kable(cmat) %>%
+  kable_styling()
+
+```
+
+
+# Ranked importance
+
+
+```{r out.width="100%", echo=FALSE}
+ran1 <- plotRanks(res1$data, measures[mindex], "perf", decreasing=TRUE)
+ran1$p
+ran2 <- plotRanks(res2$data, measures[mindex], "norm", decreasing=TRUE)
+ran2$p
+ran3 <- plotRanks(res3$data, measures[mindex], "quan", decreasing=TRUE)
+ran3$p
+ran4 <- plotRanks(res4$data, measures[mindex], "irank", decreasing=TRUE)
+ran4$p
+ran5 <- plotRanks(res5$data, measures[mindex], "rank", decreasing=TRUE)
+ran5$p
+ran6 <- plotRanks(res6$data, measures[mindex], "qrank", decreasing=TRUE)
+ran6$p
+
+
+
+#all_names <- colnames(res1$data)
+#all_names <- all_names[!(all_names %in% c("rep", "trep"))]
+#data1 <- t(apply(res1$data, 1, function(x) { x[all_names] <- all_names[order(x[all_names])]; return(x) }))
+#colnames(data1) <- c("rep", "trep", 1:length(all_names))
+#kable(data1) %>%
+#  kable_styling()     
+
+```
