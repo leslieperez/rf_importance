@@ -8,54 +8,138 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(kableExtra)
+library(ggplot2)
 ```
 
-(We focus for now on the acotps1000-4500-1 data set.)
+(We focus for now on the acotsp1000-4500-1 data set.)
 
-## 1. Dependent variable: raw performance
-
+## 0. Helpers
 ```{r}
-readImportance <- function(fname) {
+measures=c("perf","norm","quan","rank","irank","qrank")
+# wrapping function
+wrap.it <- function(x, len) { 
+  sapply(x, function(y) paste(strwrap(y, len), collapse = "\n"), USE.NAMES = FALSE)
+}
+resultFile <- function(mname,dir="test1",rep="") {
+  paste(dir,"/irace-acotsp1000-4500-1-",mname,"-importance",rep,".dat",sep="")
+}
+readImportance <- function(fname,tag="") {
   data=read.table(fname,h=T) %>% select(parameter,ind_imp,ind_std) %>% arrange(-ind_imp)
-  colnames(data)=c("variable","importance","std_dev")
+  if (tag!="") {
+    data$measure=tag
+  }
+  colnames(data)[1:3]=c("variable","importance","std_dev")
   return(data)
 }
-
-data=readImportance("irace-acotsp1000-4500-1-perf-importance.dat")
-kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+importanceTable <- function(mname) {
+  data=readImportance(resultFile(mname))
+  kable(data,caption=paste("Importance for measure ``",mname,"'' (single run)",sep=""), digits=c(0,3,3)) %>% kable_styling(latex_options=c("striped","hold_position"))
+}
+readAll <- function() {
+  data=data.frame()
+  for (mname in measures) {
+    data = data %>% rbind(readImportance(resultFile(mname),tag=mname))
+  }
+  return(data)
+}
+readReplications <- function(mname) {
+  data=data.frame()
+  for (r in c(1,2,3,4,5)) {
+    data = data %>% rbind(readImportance(resultFile(mname,dir="test2",rep=paste("_r",r,sep="")),tag=r))
+  }
+  return(data)
+}
+bumpSingle <- function() {
+  data=readAll() %>% group_by(measure) %>% mutate(rank=rank(importance),measure=factor(measure,levels=measures,ordered=T))
+  first=data %>% filter(measure=="perf")
+  ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_point()+geom_line()+geom_text(data=first,x=1,y=first$rank,label=wrap.it(first$variable,10),hjust=1.1,size=4)+labs(title="Ranking under different measures",x="Measure",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))
+}
+bumpPlot <- function(mname) {
+  data=readReplications(mname) %>% group_by(measure) %>% mutate(rank=rank(importance))
+  first=data %>% filter(measure==1)
+  ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_point()+geom_line()+geom_text(data=first,x=1,y=first$rank,label=wrap.it(first$variable,10),hjust=1.1,size=4)+labs(title=paste("Ranking over different replications for measure ``",mname,"''",sep=""),x="Replication",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))
+}
 ```
 
-## 2. Dependent variable: normalized performance
+## 1. Analysis of a single run
+
+### 1.1. Dependent variable: raw performance
 
 ```{r}
-data=readImportance("irace-acotsp1000-4500-1-norm-importance.dat")
-kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+importanceTable("perf")
 ```
 
-## 3. Dependent variable: performance quantile
+### 1.2. Dependent variable: normalized performance
 
 ```{r}
-data=readImportance("irace-acotsp1000-4500-1-quan-importance.dat")
-kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+importanceTable("norm")
 ```
 
-## 4. Dependent variable: normalized ranking
+### 1.3. Dependent variable: performance quantile
 
 ```{r}
-data=readImportance("irace-acotsp1000-4500-1-rank-importance.dat")
-kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+importanceTable("quan")
 ```
 
-## 5. Dependent variable: normalized ranking with imputation
+### 1.4. Dependent variable: normalized ranking
 
 ```{r}
-data=readImportance("irace-acotsp1000-4500-1-irank-importance.dat")
-kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+importanceTable("rank")
 ```
 
-## 6. Dependent variable: ranking quartile with imputation
+### 1.5. Dependent variable: normalized ranking with imputation
 
 ```{r}
-data=readImportance("irace-acotsp1000-4500-1-qrank-importance.dat")
-kable(data) %>% kable_styling(latex_options=c("striped","hold_position"))
+importanceTable("irank")
+```
+
+### 1.6. Dependent variable: ranking quartile with imputation
+
+```{r}
+importanceTable("qrank")
+```
+
+## 2. Comparison of measures among a single run
+
+```{r}
+bumpSingle()
+```
+
+## 3. Comparison of five replications
+
+
+### 3.1. Dependent variable: raw performance
+
+```{r}
+bumpPlot("perf")
+```
+
+### 3.2. Dependent variable: normalized performance
+
+```{r}
+bumpPlot("norm")
+```
+
+### 3.3. Dependent variable: performance quantile
+
+```{r}
+bumpPlot("quan")
+```
+
+### 3.4. Dependent variable: normalized ranking
+
+```{r}
+bumpPlot("rank")
+```
+
+### 3.5. Dependent variable: normalized ranking with imputation
+
+```{r}
+bumpPlot("irank")
+```
+
+### 3.6. Dependent variable: ranking quartile with imputation
+
+```{r}
+bumpPlot("qrank")
 ```
