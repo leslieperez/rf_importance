@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import numpy as np
 import ConfigSpace
 import ConfigSpace.hyperparameters as hp
@@ -14,7 +15,10 @@ parser.add_argument('-p','--plot',action='store_true',help='Create plots')
 parser.add_argument('-i','--interaction',action='store_true',help='Determine interaction importance')
 parser.add_argument('-s','--single',action='store_true',help='Determine single parameter importance')
 parser.add_argument('-r','--replication',type=str,default='',help='Replication identifier')
+parser.add_argument('-t','--ntrees',type=int,default=16,help='Number of trees')
 args = parser.parse_args()
+
+base=os.path.basename(args.Base)
 
 X=pd.read_csv(args.Base+'-features.csv')
 Y=np.loadtxt(args.Base+'-response.csv', delimiter=",")
@@ -44,14 +48,14 @@ cs.add_hyperparameter(hp.UniformIntegerHyperparameter('elitistants', lower=1, up
 cs.add_hyperparameter(hp.UniformIntegerHyperparameter('instance', lower=min(X['instance']), upper=max(X['instance'])))
 
 ## (4) execute fANOVA
-f = fANOVA(X,Y,config_space=cs)
+f = fANOVA(X,Y,config_space=cs,n_trees=args.ntrees)
 
 ## (5) output parameter importance
 pnames=X.columns.tolist()
 
 if args.single:
     print("Individual importance.")
-    with open(args.Base+'-importance'+args.replication+'.dat','w') as inf:
+    with open(base+'-importance'+args.replication+'.dat','w') as inf:
         print("parameter ind_imp tot_imp ind_std tot_std",file=inf)
         for i in range(0,len(pnames)):
             print(pnames[i])
@@ -61,32 +65,32 @@ if args.single:
 ## (6) output parameter interaction importance
 
 ## all pairs
-#if args.interaction:
-#    print("Interaction importance.")
-#    with open(args.Base+'-interaction-importance.dat','w') as inf:
-#        print("parameter1 parameter2 ind_imp tot_imp ind_std tot_std",file=inf)
-#        for i in range(0,len(pnames)):
-#            for j in range(0,len(pnames)):
-#                if i==j:
-#                    continue
-#                print(pnames[i],pnames[j])
-#                imp=f.quantify_importance((pnames[i], pnames[j]))[(pnames[i], pnames[j])]
-#                print(pnames[i],pnames[j],imp['individual importance'],imp['total importance'],imp['individual std'],imp['total std'],file=inf)
-
-## 10 best via fANOVA
 if args.interaction:
     print("Interaction importance.")
-    mipm=f.get_most_important_pairwise_marginals()
-    with open(args.Base+'-interaction-importance'+args.replication+'.dat','w') as inf:
+    with open(base+'-interaction-importance.dat','w') as inf:
         print("parameter1 parameter2 ind_imp tot_imp ind_std tot_std",file=inf)
-        for ia in mipm:
-                print(ia[0],ia[1])
-                print(ia[0],ia[1],mipm[ia],file=inf)
+        for i in range(0,len(pnames)):
+            for j in range(0,len(pnames)):
+                if i==j:
+                    continue
+                print(pnames[i],pnames[j])
+                imp=f.quantify_importance((pnames[i], pnames[j]))[(pnames[i], pnames[j])]
+                print(pnames[i],pnames[j],imp['individual importance'],imp['total importance'],imp['individual std'],imp['total std'],file=inf)
+
+## n=10 best via fANOVA: unused, since they just compute all and filter
+#if args.interaction:
+#    print("Interaction importance.")
+#    mipm=f.get_most_important_pairwise_marginals()
+#    with open(args.Base+'-interaction-importance'+args.replication+'.dat','w') as inf:
+#        print("parameter1 parameter2 ind_imp tot_imp ind_std tot_std",file=inf)
+#        for ia in mipm:
+#                print(ia[0],ia[1])
+#                print(ia[0],ia[1],mipm[ia],file=inf)
 
 ## (7) output the plots
 if args.plot:
     print("Creating plots.")
-    plotdir=args.Base+'-plots'
+    plotdir=base+'-plots'
     if not os.path.exists(plotdir):
         os.mkdir(plotdir)
         vis = fanova.visualizer.Visualizer(f, cs, plotdir)

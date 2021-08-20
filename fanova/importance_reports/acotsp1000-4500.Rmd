@@ -1,5 +1,5 @@
 ---
-title: "ACOTSP 1000--4500 Estimation of parameter importance with fANOVA"
+title: "Estimation of parameter importance with fANOVA"
 author: "Marcus Ritt"
 output: pdf_document
 ---
@@ -9,100 +9,60 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(kableExtra)
 library(ggplot2)
+source("../functions.R")
 ```
 
-(We focus for now on the acotsp1000-4500-1 data set.)
-
-## 0. Helpers
-```{r}
-measures=c("perf","norm","quan","rank","irank","qrank")
-# wrapping function
-wrap.it <- function(x, len) { 
-  sapply(x, function(y) paste(strwrap(y, len), collapse = "\n"), USE.NAMES = FALSE)
-}
-resultFile <- function(mname,dir="test1",rep="") {
-  paste(dir,"/irace-acotsp1000-4500-1-",mname,"-importance",rep,".dat",sep="")
-}
-readImportance <- function(fname,tag="") {
-  data=read.table(fname,h=T) %>% select(parameter,ind_imp,ind_std) %>% arrange(-ind_imp)
-  if (tag!="") {
-    data$measure=tag
-  }
-  colnames(data)[1:3]=c("variable","importance","std_dev")
-  return(data)
-}
-importanceTable <- function(mname) {
-  data=readImportance(resultFile(mname))
-  kable(data,caption=paste("Importance for measure ``",mname,"'' (single run)",sep=""), digits=c(0,3,3)) %>% kable_styling(latex_options=c("striped","hold_position"))
-}
-readAll <- function() {
-  data=data.frame()
-  for (mname in measures) {
-    data = data %>% rbind(readImportance(resultFile(mname),tag=mname))
-  }
-  return(data)
-}
-readReplications <- function(mname) {
-  data=data.frame()
-  for (r in c(1,2,3,4,5)) {
-    data = data %>% rbind(readImportance(resultFile(mname,dir="test2",rep=paste("_r",r,sep="")),tag=r))
-  }
-  return(data)
-}
-bumpSingle <- function() {
-  data=readAll() %>% group_by(measure) %>% mutate(rank=rank(importance),measure=factor(measure,levels=measures,ordered=T))
-  first=data %>% filter(measure=="perf")
-  ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_point()+geom_line()+geom_text(data=first,x=1,y=first$rank,label=wrap.it(first$variable,10),hjust=1.1,size=4)+labs(title="Ranking under different measures",x="Measure",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))
-}
-bumpPlot <- function(mname) {
-  data=readReplications(mname) %>% group_by(measure) %>% mutate(rank=rank(importance))
-  first=data %>% filter(measure==1)
-  ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_point()+geom_line()+geom_text(data=first,x=1,y=first$rank,label=wrap.it(first$variable,10),hjust=1.1,size=4)+labs(title=paste("Ranking over different replications for measure ``",mname,"''",sep=""),x="Replication",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))
-}
+```{r, include=FALSE}
+dataset="test1/irace-acotsp1000-4500-1" # this one has no replications
+dataset="test2/irace-acotsp1000-4500-1"
+dataset="test3/acotsp1000-4500-01"
+use.ranks=TRUE
 ```
+
+(For dataset: `r dataset`.)
 
 ## 1. Analysis of a single run
 
 ### 1.1. Dependent variable: raw performance
 
 ```{r}
-importanceTable("perf")
+importanceTable(dataset,"perf")
 ```
 
 ### 1.2. Dependent variable: normalized performance
 
 ```{r}
-importanceTable("norm")
+importanceTable(dataset,"norm")
 ```
 
 ### 1.3. Dependent variable: performance quantile
 
 ```{r}
-importanceTable("quan")
+importanceTable(dataset,"quan")
 ```
 
 ### 1.4. Dependent variable: normalized ranking
 
 ```{r}
-importanceTable("rank")
+importanceTable(dataset,"rank")
 ```
 
 ### 1.5. Dependent variable: normalized ranking with imputation
 
 ```{r}
-importanceTable("irank")
+importanceTable(dataset,"irank")
 ```
 
 ### 1.6. Dependent variable: ranking quartile with imputation
 
 ```{r}
-importanceTable("qrank")
+importanceTable(dataset,"qrank")
 ```
 
 ## 2. Comparison of measures among a single run
 
 ```{r}
-bumpSingle()
+bumpChartMeasures(dataset,do.rank=use.ranks)
 ```
 
 ## 3. Comparison of five replications
@@ -111,35 +71,35 @@ bumpSingle()
 ### 3.1. Dependent variable: raw performance
 
 ```{r}
-bumpPlot("perf")
+bumpChartReplications(dataset,"perf",do.rank=use.ranks)
 ```
 
 ### 3.2. Dependent variable: normalized performance
 
 ```{r}
-bumpPlot("norm")
+bumpChartReplications(dataset,"norm",do.rank=use.ranks)
 ```
 
 ### 3.3. Dependent variable: performance quantile
 
 ```{r}
-bumpPlot("quan")
+bumpChartReplications(dataset,"quan",do.rank=use.ranks)
 ```
 
 ### 3.4. Dependent variable: normalized ranking
 
 ```{r}
-bumpPlot("rank")
+bumpChartReplications(dataset,"rank",do.rank=use.ranks)
 ```
 
 ### 3.5. Dependent variable: normalized ranking with imputation
 
 ```{r}
-bumpPlot("irank")
+bumpChartReplications(dataset,"irank",do.rank=use.ranks)
 ```
 
 ### 3.6. Dependent variable: ranking quartile with imputation
 
 ```{r}
-bumpPlot("qrank")
+bumpChartReplications(dataset,"qrank",do.rank=use.ranks)
 ```

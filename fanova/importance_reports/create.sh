@@ -4,20 +4,17 @@
 ######################################################################
 base=$(git rev-parse --show-toplevel 2> /dev/null)
 fanova="${base}/fanova"
-
+data="${fanova}/importance_reports/input"
 types="perf norm quan rank irank qrank"
-data="irace-acotsp1000-4500"
 export="${fanova}/export.R"
 process="${fanova}/process.py"
 
 ## preprocess
-function preProcess() {
-    mkdir input
-    cd input
+function preprocess() {
+    local file=$1
+    cd ${fanova}/importance_reports/input
     for t in ${types}; do
-	for i in 1 2 3 4 5; do
-	    ${export} -t ${t} ${base}/irace_data/${data}-${i}.Rdata
-	done
+	${export} -t ${t} ${file}.Rdata
     done
 }
 
@@ -25,16 +22,16 @@ function preProcess() {
 #
 # name: base name; we expect to see name-perf.csv, name-norm.csv, etc.
 # rep:  number of replications
-function process_single() {
+function process() {
     name=$1
     rep=$2
-    
+
     pf="_r"
     for t in ${types}; do
 	for r in $(seq 1 ${rep}); do
 	    if [ -e ${name}-${t}-features.csv ]; then
-		echo "Processing ${name} type ${t} replication ${r}"
-		${process} -s -r "${pf}${r}" ${name}-${t}
+		echo "Processing $(basename ${name}) type ${t} replication ${r}"
+		${process} -t 100 -s -r "${pf}${r}" ${name}-${t}
 	    else
 		echo "Skipping ${name} type ${t} replication ${r}"
 	    fi
@@ -42,15 +39,10 @@ function process_single() {
     done
 }
 
-## process_all: process all five runs of the data file (for irace-acotsp1000-4500 only)
-function process_all() {
-    name=$1
-    rep=$2
-    for i in 1 2 3 4 5; do
-	echo "Processing ${i} ${t}"
-	process_single ${data}-${i} ${rep}
-    done
-}
+## preprocessing
+#for i in {1..5}; do   preprocess ${base}/irace_data/irace-acotsp1000-4500-$i; done
+#for i in {01..05}; do preprocess ${base}/experiments/irace_data/acotsp1000-4500-$i; done
 
-#process_all ${data} 2
-process_single "${data}-1" 5
+## processing
+#for i in {1..5}; do process ${data}/irace-acotsp1000-4500-$i; done
+process ${data}/acotsp1000-4500-01 5
