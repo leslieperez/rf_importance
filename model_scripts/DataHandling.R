@@ -108,11 +108,12 @@ createData <- function(configurations, experiments, parameters, remove.na.from=N
     # impute experiment performance by instance
     experiments <- doImputePerformance(experiments)
   }
-  
+
+  sfile <- tempfile("plot", fileext = c(".txt"))  
   lapply(1:nrow(experiments), dataNameBind, experiments=experiments, 
-         configurations=configurations, add.instance=add.instance, data.type=data.type)
-  data <- read.table("rf-data.txt", 
-                     header=TRUE, sep=":", stringsAsFactors=FALSE)
+         configurations=configurations, add.instance=add.instance, 
+         data.type=data.type, file=sfile)
+  data <- read.table(sfile, header=TRUE, sep=":", stringsAsFactors=FALSE)
   data <- doImputeCols(data, parameters = parameters) 
   
   # Adding instances to the data set
