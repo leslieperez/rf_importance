@@ -56,11 +56,15 @@ RFModel <- R6Class("RFModel",
                      # interactions in interactions_frame
                      sampling.order = c(),
   
-                     initialize = function(n_trees, parameters, scenario) {
+                     initialize = function(n_trees, parameters, scenario=NULL) {
                        private$n_trees = n_trees
                        private$parameters = parameters
-                       private$id_seed = scenario$seed
-                       self$sampling.order = names(scenario$parameters$conditions)
+                       if (!is.null(scenario)) {
+                         private$id_seed = scenario$seed
+                       } else {
+                         private$id_seed = 1234567
+                       }
+                       self$sampling.order = names(parameters$conditions)
                      },
                      
                      # function trainModel trains a random forest model, calculates important parameters and
@@ -84,7 +88,7 @@ RFModel <- R6Class("RFModel",
                                                   importance=TRUE, localImp = TRUE, ntree=private$n_trees)
                        
                        cat("# Identifying important parameters ...\n")
-                       private$identifyImportantParameters(configurations, experiments, conditionals=conditionals)
+                       private$identifyImportantParameters(conditionals=conditionals)
                        
                        if (interaction) {
                          # If enforced, a dummy reference parameter is added to the list of important parameters
@@ -215,7 +219,7 @@ RFModel <- R6Class("RFModel",
                      # function identifyImportantParameters fills the variable important_parameters
                      # receives as in input the set of configurations and experiments used to build
                      # self$model
-                     identifyImportantParameters = function(configurations, experiments, force.dummy=FALSE, conditionals=FALSE) {
+                     identifyImportantParameters = function(force.dummy=FALSE, conditionals=FALSE) {
                        # calculate parameter importance in the current model
                        self$importance_frame <- randomForestExplainer::measure_importance(self$model)
                        
@@ -232,7 +236,7 @@ RFModel <- R6Class("RFModel",
                          # check if there is conditional parameters between the important vars
                          pnames.to.remove <- c()
                          for (pname in params) {
-                           if (pname!="dummy" && !private$isConditionalImportant(pname, configurations, experiments)) {
+                           if (pname!="dummy" && !private$isConditionalImportant(pname)) {
                              pnames.to.remove <- c(pnames.to.remove, pname)
                            } 
                          }
@@ -403,7 +407,8 @@ RFModel <- R6Class("RFModel",
                      # function isConditionalImportant checks if a conditional parameter is really
                      # important by filtering NA rows of this parameter.
                      # 
-                     isConditionalImportant = function (pname, configurations, experiments) {
+                     isConditionalImportant = function (pname) {
+                       #, configurations, experiments) {
                        if (length(private$parameters$depends[[pname]]) > 0){
                          # remove NA rows from the data and check if the parameter is still is important
                          aux.data <- reduceData(self$training_data, parameters=private$parameters, remove.na.from=pname)
