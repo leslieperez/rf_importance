@@ -30,22 +30,30 @@ for cat in categorical:
 
 ## (3) create a config space (mostly manually for now)
 cs = ConfigSpace.ConfigurationSpace()
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('dummy', lower=1, upper=10))
-#cs.add_hyperparameter(hp.CategoricalHyperparameter('algorithm', choices=list(set(X['algorithm'].tolist()))))
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('algorithm', lower=min(X['algorithm']), upper=max(X['algorithm'])))
-cs.add_hyperparameter(hp.CategoricalHyperparameter('localsearch', choices=['0','1','2','3']))
-cs.add_hyperparameter(hp.UniformFloatHyperparameter('alpha', lower=0.0, upper=5.0))
-cs.add_hyperparameter(hp.UniformFloatHyperparameter('beta', lower=0.0, upper=10.0))
-cs.add_hyperparameter(hp.UniformFloatHyperparameter('rho', lower=0.0, upper=1.0))
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('ants', lower=5, upper=100))
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('nnls', lower=5, upper=100))
-cs.add_hyperparameter(hp.UniformFloatHyperparameter('q0', lower=0.0, upper=2.0))
-#cs.add_hyperparameter(hp.CategoricalHyperparameter('dlb', choices=list(set(X['dlb'].tolist()))))
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('dlb', lower=min(X['dlb']), upper=max(X['dlb'])))
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('rasrank', lower=0, upper=200))
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('elitistants', lower=1, upper=1500))
-#cs.add_hyperparameter(hp.CategoricalHyperparameter('instance', choices=list(set(X['instance'].tolist()))))
-cs.add_hyperparameter(hp.UniformIntegerHyperparameter('instance', lower=min(X['instance']), upper=max(X['instance'])))
+
+
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('dummy', lower=1, upper=10))
+#  #cs.add_hyperparameter(hp.CategoricalHyperparameter('algorithm', choices=list(set(X['algorithm'].tolist()))))
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('algorithm', lower=min(X['algorithm']), upper=max(X['algorithm'])))
+#  cs.add_hyperparameter(hp.CategoricalHyperparameter('localsearch', choices=['0','1','2','3']))
+#  cs.add_hyperparameter(hp.UniformFloatHyperparameter('alpha', lower=0.0, upper=5.0))
+#  cs.add_hyperparameter(hp.UniformFloatHyperparameter('beta', lower=0.0, upper=10.0))
+#  cs.add_hyperparameter(hp.UniformFloatHyperparameter('rho', lower=0.0, upper=1.0))
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('ants', lower=5, upper=100))
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('nnls', lower=5, upper=100))
+#  cs.add_hyperparameter(hp.UniformFloatHyperparameter('q0', lower=0.0, upper=2.0))
+#  #cs.add_hyperparameter(hp.CategoricalHyperparameter('dlb', choices=list(set(X['dlb'].tolist()))))
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('dlb', lower=min(X['dlb']), upper=max(X['dlb'])))
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('rasrank', lower=0, upper=200))
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('elitistants', lower=1, upper=1500))
+#  #cs.add_hyperparameter(hp.CategoricalHyperparameter('instance', choices=list(set(X['instance'].tolist()))))
+#  cs.add_hyperparameter(hp.UniformIntegerHyperparameter('instance', lower=min(X['instance']), upper=max(X['instance'])))
+
+## artificial X4
+cs.add_hyperparameter(hp.UniformFloatHyperparameter('param_a', lower=0.0, upper=2.0))
+cs.add_hyperparameter(hp.UniformFloatHyperparameter('param_b', lower=0.0, upper=2.0))
+cs.add_hyperparameter(hp.UniformFloatHyperparameter('param_c', lower=0.0, upper=2.0))
+cs.add_hyperparameter(hp.UniformFloatHyperparameter('param_d', lower=0.0, upper=2.0))
 
 ## (4) execute fANOVA
 f = fANOVA(X,Y,config_space=cs,n_trees=args.ntrees)
@@ -77,7 +85,7 @@ if args.interaction:
                 imp=f.quantify_importance((pnames[i], pnames[j]))[(pnames[i], pnames[j])]
                 print(pnames[i],pnames[j],imp['individual importance'],imp['total importance'],imp['individual std'],imp['total std'],file=inf)
 
-## n=10 best via fANOVA: unused, since they just compute all and filter
+## n=10 most importante parameters via fANOVA: unused, since they just compute all and filter
 #if args.interaction:
 #    print("Interaction importance.")
 #    mipm=f.get_most_important_pairwise_marginals()
