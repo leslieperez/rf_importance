@@ -283,7 +283,7 @@ doImputeCols <- function(data, pnames=NULL, parameters)
       data[,pname] <- factor(data[,pname], ordered=FALSE)
     }
   }
-  
+
   if (".PERFORMANCE." %in% colnames(data)){
     data[,".PERFORMANCE."] <- as.numeric(data[,".PERFORMANCE."])
   }
