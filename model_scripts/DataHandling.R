@@ -13,7 +13,12 @@
 #    - rank: ranking (normalized)
 #    - irank: ranking (including imputation)
 #    - qrank: ranking quartile (including imputation)
-getDataFromIrace <- function(irace_file, remove.na.from=NULL, add.dummy=FALSE, add.instance=TRUE, data.type="perf") {
+# imputation: type of imputation for missing numerical values
+#    - out: Value outside the domain
+#    - mean: Mean of the data
+#    - random: Random value
+getDataFromIrace <- function(irace_file, remove.na.from=NULL, add.dummy=FALSE, 
+                             add.instance=TRUE, data.type="perf", imputation="out") {
   load(irace_file)
   if (!exists("iraceResults")) 
     stop("# Error: Provided file does not have an iraceResults object.")
@@ -29,14 +34,21 @@ getDataFromIrace <- function(irace_file, remove.na.from=NULL, add.dummy=FALSE, a
 # * remove.na.from: vector of parameter names to indicate the removal of rows (configurations) with NA values in these parameters
 # * add.dummy: bool, adding a dummy predictor to be used as reference
 # * add.instance: bool, addind the instance as a predictor
-# * type: type of data to build: 
+# * data.type: type of data to build: 
 #    - perf: performance (raw)
 #    - norm: performance (normalized)
 #    - quan: performance quartile
 #    - rank: ranking (normalized)
 #    - irank: ranking (including imputation)
 #    - qrank: ranking quartile (including imputation)
-createData <- function(configurations, experiments, parameters, remove.na.from=NULL, add.dummy=FALSE, add.instance=TRUE, data.type="perf") 
+# imputation: type of imputation for missing numerical values
+#    - out: Value outside the domain
+#    - mean: Mean of the data
+#    - mode: Mode of the data
+#    - random: Random value
+createData <- function(configurations, experiments, parameters, remove.na.from=NULL, 
+                       add.dummy=FALSE, add.instance=TRUE, data.type="perf",
+                       imputation="out") 
 {
   cat("# Creating training data...\n")
   if (data.type == "perf")  
@@ -54,6 +66,16 @@ createData <- function(configurations, experiments, parameters, remove.na.from=N
   else 
     stop("# Error: Unknown data type: ", data.type)
   
+  if (imputation == "out")  
+    cat("# Imputation: Out of domain\n")
+  else if (imputation == "mean")  
+    cat("# Imputation: Mean\n")
+  else if (imputation == "random")  
+    cat("# Imputation: Random\n")
+  else if (imputation == "mode")  
+    cat("# Imputation: Mode\n")
+  else 
+    stop("# Error: Unknown imputation type: ", imputation)
   
   # Drop not used columns (.ID., .PARENT.)
   configurations <- configurations[, grep("^\\.", colnames(configurations), invert = TRUE),drop = FALSE]
@@ -114,7 +136,7 @@ createData <- function(configurations, experiments, parameters, remove.na.from=N
          configurations=configurations, add.instance=add.instance, 
          data.type=data.type, file=sfile)
   data <- read.table(sfile, header=TRUE, sep=":", stringsAsFactors=FALSE)
-  data <- doImputeCols(data, parameters = parameters) 
+  data <- doImputeCols(data, parameters = parameters, imputation=imputation) 
   
   # Adding instances to the data set
   if (add.instance){
@@ -256,7 +278,12 @@ dataNameBind <- function (index, experiments, configurations, file="rf-data.txt"
 # __miss__ and numerical as the domain upper bound * 2
 # * data: data frame with data entries
 # * pnames: parameter names to be considered in the imputation
-doImputeCols <- function(data, pnames=NULL, parameters) 
+# imputation: type of imputation for missing numerical values
+#    - out: Value outside the domain
+#    - mean: Mean of the data
+#    - mode: Mode of the data
+#    - random: Random value
+doImputeCols <- function(data, pnames=NULL, parameters, imputation="out") 
   {
   cat("# Imputing parameter data...\n")
   
@@ -272,7 +299,22 @@ doImputeCols <- function(data, pnames=NULL, parameters)
     if (sum(sel) >= 1) {
       cat("# Imputing", sum(sel),"/",length(sel),"values in", pname, "type", parameters$types[pname],"\n")
       if (parameters$types[pname] %in% c("r","i", "ilog", "rlog")) {
-        data[sel ,pname] <- parameters$domain[[pname]][2] * 2
+        if (imputation == "out") {
+          data[sel ,pname] <- parameters$domain[[pname]][2] * 2
+        } else if (imputation == "mean") {
+          val <- mean(data[,pname], na.rm=TRUE) 
+          if (parameters$types[pname] %in% c("i", "ilog"))
+            val <- round(val)
+          data[sel ,pname] <- val
+        } else if (imputation == "random") {
+          val <- runif(n = sum(sel), min = parameters$domain[[pname]][1], max=parameters$domain[[pname]][2])
+          if (parameters$types[pname] %in% c("i", "ilog"))
+            val <- round(val)
+          data[sel, pname] <- val
+        } else if (imputation == "mode") {
+          val <- getmode(data[,pname]) 
+          data[sel ,pname] <- val
+        }
       } else if (parameters$types[pname] %in% c("c","o")) {
         data[,pname] <- as.character(data[,pname])
         data[sel ,pname] <- rep("__miss__", sum(sel))
@@ -288,6 +330,13 @@ doImputeCols <- function(data, pnames=NULL, parameters)
     data[,".PERFORMANCE."] <- as.numeric(data[,".PERFORMANCE."])
   }
   return(data)
+}
+
+getmode <- function(v) {
+  v <- v[!is.na(v)]
+  uniqv <- unique(v)
+  mm <- uniqv[which.max(tabulate(match(v, uniqv)))]
+  return(mm)
 }
 
 # Function doImputePerformance imputes experiment performance. NA experiments are imputed,
