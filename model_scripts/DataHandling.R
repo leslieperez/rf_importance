@@ -24,7 +24,7 @@ getDataFromIrace <- function(irace_file, remove.na.from=NULL, add.dummy=FALSE,
     stop("# Error: Provided file does not have an iraceResults object.")
     
   data <- createData(iraceResults$allConfigurations, iraceResults$experiments, iraceResults$parameters, 
-             remove.na.from = remove.na.from, add.dummy = add.dummy, add.instance = add.instance, data.type=data.type)
+             remove.na.from = remove.na.from, add.dummy = add.dummy, add.instance = add.instance, data.type=data.type, imputation=imputation)
   return(data)
 }
 
