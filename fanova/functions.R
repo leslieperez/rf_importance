@@ -57,10 +57,8 @@ bumpChartMeasures <- function(dataset,do.rank=TRUE) {
         data=data %>% mutate(rank=importance+eps)
     
     first=data %>% filter(measure=="perf")
-    plot=ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_point()+geom_line()+geom_text(data=first,aes(x=1,y=first$rank,label=wrap.it(first$variable,10)),hjust=1.1,size=4)+labs(title="Ranking under different measures",x="Measure",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))
-    if (do.rank)
-        plot=plot+geom_line()
-    else
+    plot=ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_line()+geom_text(data=first,aes(x=1,y=first$rank,label=wrap.it(first$variable,10)),hjust=1.1,size=4)+labs(title="Ranking under different measures",x="Measure",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))+geom_point()#+geom_jitter(width=0.05,height=0)
+    if (!do.rank)
         plot=plot+geom_linerange(aes(ymin=pmax(rank-std_dev,eps),ymax=pmin(rank+std_dev,1)))+scale_y_log10()
     plot
 }
@@ -74,11 +72,9 @@ bumpChartReplications <- function(dataset,mname,do.rank=TRUE) {
         data=data %>% mutate(rank=importance+eps)
     
     first=data %>% filter(measure==1)
-    plot=ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_point()+geom_line()+geom_text(data=first,aes(x=1,y=first$rank,label=wrap.it(first$variable,10)),hjust=1.1,size=4)+labs(title=paste("Ranking over different replications for measure ``",mname,"''",sep=""),x="Replication",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))
+    plot=ggplot(data=data,aes(x=measure,y=rank,group=variable,color=variable))+geom_line()+geom_text(data=first,aes(x=1,y=first$rank,label=wrap.it(first$variable,10)),hjust=1.1,size=4)+labs(title=paste("Ranking over different replications for measure ``",mname,"''",sep=""),x="Replication",y="Rank")+theme(legend.position="none")+geom_blank(aes(x=0, y=1))+geom_point()#+geom_jitter(width=0.05,height=0)
 
-    if (do.rank)
-        plot=plot+geom_line()
-    else
+    if (!do.rank)
         plot=plot+geom_linerange(aes(ymin=pmax(rank-std_dev,eps),ymax=pmin(rank+std_dev,1)))+scale_y_log10()
     plot
 }
